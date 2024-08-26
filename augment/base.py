@@ -7,18 +7,18 @@ import typing
 import nltk.tokenize
 
 from augment import params
-from data import model
+from data import PetDocument, PetToken, PetMention
 from transformations import tokenmanager
 
 
 class AugmentationStep(abc.ABC):
-    def __init__(self, dataset: typing.List[model.Document], **kwargs):
+    def __init__(self, dataset: typing.List[PetDocument], **kwargs):
         self.dataset = dataset
 
     @abc.abstractmethod
     def do_augment(
-        self, doc: model.Document, num_augments: int
-    ) -> typing.List[model.Document]:
+        self, doc: PetDocument, num_augments: int
+    ) -> typing.List[PetDocument]:
         raise NotImplementedError()
 
     @staticmethod
@@ -45,31 +45,29 @@ class AugmentationStep(abc.ABC):
 
     @staticmethod
     def get_sequences(
-        doc: model.Document,
-    ) -> typing.List[typing.List[model.Token]]:
+        doc: PetDocument,
+    ) -> typing.List[typing.List[PetToken]]:
         """
         Returns a list of sequences (lists) of tokens, that have
         the same ner tag.
         """
         tagged_sequences = []
 
-        for sentence in doc.sentences:
-            last_sequence: typing.List[model.Token] = []
-            last_mention: typing.Optional[model.Mention] = None
-            for token in sentence.tokens:
-                mentions = doc.get_mentions_for_token(token)
-                if len(mentions) == 0:
-                    current_mention = None
-                else:
-                    current_mention = mentions[0]
-                if current_mention != last_mention:
-                    if len(last_sequence) > 0:
-                        tagged_sequences.append(last_sequence)
-                    last_sequence = []
-                last_mention = current_mention
-                last_sequence.append(token)
-            if len(last_sequence) > 0:
-                tagged_sequences.append(last_sequence)
+        cur_sequence = [doc.tokens[0]]
+        last_mention: typing.Optional[PetMention] = None
+        for token in doc.tokens[1:]:
+            if token.sentence_index != cur_sequence[-1].sentence_index:
+                # new sentence started
+                tagged_sequences.append(cur_sequence)
+                cur_sequence = [token]
+            cur_mention = doc.get_mention_for_token(token)
+            if cur_mention != last_mention:
+                # new mention started
+                tagged_sequences.append(cur_sequence)
+                cur_sequence = [token]
+                last_mention = cur_mention
+        if len(cur_sequence) > 0:
+            tagged_sequences.append(cur_sequence)
 
         return tagged_sequences
 
@@ -77,7 +75,7 @@ class AugmentationStep(abc.ABC):
 class BaseTokenReplacementStep(AugmentationStep, abc.ABC):
     def __init__(
         self,
-        dataset: typing.List[model.Document],
+        dataset: typing.List[PetDocument],
         replacements_per_sentence: int,
         **kwargs,
     ):
@@ -90,23 +88,23 @@ class BaseTokenReplacementStep(AugmentationStep, abc.ABC):
 
     @abc.abstractmethod
     def get_replacement_candidates(
-        self, doc: model.Document
-    ) -> typing.List[typing.List[model.Token]]:
+        self, doc: PetDocument
+    ) -> typing.List[typing.List[PetToken]]:
         raise NotImplementedError()
 
     @abc.abstractmethod
     def get_replacement(
-        self, candidate: typing.List[model.Token]
+        self, candidate: typing.List[PetToken]
     ) -> typing.Optional[typing.List[str]]:
         raise NotImplementedError()
 
     def augment_single_doc(
-        self, doc: model.Document, candidates: typing.List[typing.List[model.Token]]
-    ) -> model.Document:
-        doc = doc.copy()
+        self, doc: PetDocument, candidates: typing.List[typing.List[PetToken]]
+    ) -> PetDocument:
+        doc = doc.copy(clear=[])
         for candidate in candidates:
-            replacement_tokens = self.get_replacement(candidate)
-            if replacement_tokens is None:
+            replacement_texts = self.get_replacement(candidate)
+            if replacement_texts is None:
                 continue
 
             num_annotations_before = (
@@ -117,18 +115,16 @@ class BaseTokenReplacementStep(AugmentationStep, abc.ABC):
 
             print(
                 f"Replacing '{' '.join(t.text for t in candidate)}' "
-                f"(sentence {candidate[0].sentence_index}, "
-                f"tokens {candidate[0].index_in_sentence(doc)} - "
-                f"{candidate[-1].index_in_sentence(doc) + 1}) "
-                f"with '{' '.join(replacement_tokens)}'."
+                f"(tokens {candidate[0].index_in_document} - "
+                f"{candidate[-1].index_in_document + 1}) "
+                f"with '{' '.join(replacement_texts)}'."
             )
 
-            tokenmanager.replace_sequence_text_in_sentence(
+            tokenmanager.replace_sequence_inplace(
                 doc,
-                candidate[0].sentence_index,
-                candidate[0].index_in_sentence(doc),
-                candidate[-1].index_in_sentence(doc) + 1,
-                replacement_tokens,
+                candidate[0].index_in_document,
+                candidate[-1].index_in_document + 1,
+                replacement_texts,
             )
 
             num_annotations_after = (
@@ -145,8 +141,8 @@ class BaseTokenReplacementStep(AugmentationStep, abc.ABC):
         return doc
 
     def do_augment(
-        self, doc: model.Document, num_augments: int
-    ) -> typing.List[model.Document]:
+        self, doc: PetDocument, num_augments: int
+    ) -> typing.List[PetDocument]:
         all_candidates = self.get_replacement_candidates(doc)
         random.shuffle(all_candidates)
 
@@ -168,7 +164,7 @@ class BaseTokenReplacementStep(AugmentationStep, abc.ABC):
 class AbbreviationStep(AugmentationStep, abc.ABC):
     def __init__(
         self,
-        dataset: typing.List[model.Document],
+        dataset: typing.List[PetDocument],
         abbreviations: typing.Dict[str, str],
         case_sensitive: bool = False,
     ):
@@ -178,21 +174,21 @@ class AbbreviationStep(AugmentationStep, abc.ABC):
         self.contractions = {v: k for k, v in abbreviations.items()}
 
     def get_contraction_candidates(
-        self, doc: model.Document
-    ) -> typing.List[typing.List[model.Token]]:
+        self, doc: PetDocument
+    ) -> typing.List[typing.List[PetToken]]:
         return self._get_candidates(self.contractions, doc)
 
     def get_expansion_candidates(
-        self, doc: model.Document
-    ) -> typing.List[typing.List[model.Token]]:
+        self, doc: PetDocument
+    ) -> typing.List[typing.List[PetToken]]:
         return self._get_candidates(self.expansions, doc)
 
     @staticmethod
     def _get_candidates(
-        dictionary: typing.Dict[str, str], doc: model.Document
-    ) -> typing.List[typing.List[model.Token]]:
+        dictionary: typing.Dict[str, str], doc: PetDocument
+    ) -> typing.List[typing.List[PetToken]]:
         candidates = []
-        candidate: typing.List[model.Token] = []
+        candidate: typing.List[PetToken] = []
         for token in doc.tokens:
             candidate += [token]
             candidate_key = " ".join(t.text for t in candidate)
@@ -215,8 +211,8 @@ class AbbreviationStep(AugmentationStep, abc.ABC):
                 return True
         return False
 
-    def do_augment(self, doc: model.Document) -> model.Document:
-        doc = doc.copy()
+    def do_augment(self, doc: PetDocument, num_augments: int) -> PetDocument:
+        doc = doc.copy(clear=[])
 
         expansion_candidates = self.get_expansion_candidates(doc)
         contraction_candidates = self.get_contraction_candidates(doc)
@@ -228,19 +224,17 @@ class AbbreviationStep(AugmentationStep, abc.ABC):
 
     @staticmethod
     def replace_candidates(
-        doc: model.Document,
-        candidates: typing.List[typing.List[model.Token]],
+        doc: PetDocument,
+        candidates: typing.List[typing.List[PetToken]],
         lookup_table: typing.Dict[str, str],
     ):
         for candidate in candidates:
-            start = candidate[0].index_in_sentence(doc)
-            stop = candidate[-1].index_in_sentence(doc) + 1
+            start = candidate[0].index_in_document
+            stop = candidate[-1].index_in_document + 1
             key = " ".join(t.text for t in candidate)
             replace_text = lookup_table[key]
             replace_tokens = nltk.tokenize.word_tokenize(replace_text)
-            tokenmanager.replace_sequence_text_in_sentence(
-                doc, candidate[0].sentence_index, start, stop, replace_tokens
-            )
+            tokenmanager.replace_sequence_inplace(doc, start, stop, replace_tokens)
 
     def load_bank110(self):
         sep = "\t"

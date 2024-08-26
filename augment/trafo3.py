@@ -3,17 +3,17 @@ import typing
 from nltk.corpus import wordnet
 
 from augment import base, params
-from data import model
+from data import PetDocument, PetToken
 
 
 class Trafo3Step(base.BaseTokenReplacementStep):
     def get_replacement_candidates(
-        self, document: model.Document
-    ) -> typing.List[typing.List[model.Token]]:
+        self, document: PetDocument
+    ) -> typing.List[typing.List[PetToken]]:
         return [[t] for t in document.tokens if t.pos_tag in ["JJ", "JJR", "JJS"]]
 
     def get_replacement(
-        self, candidate: typing.List[model.Token]
+        self, candidate: typing.List[PetToken]
     ) -> typing.Optional[typing.List[str]]:
         text = " ".join(t.text for t in candidate)
 

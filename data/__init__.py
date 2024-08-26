@@ -1,2 +1,8 @@
-from data.loader import read_documents_from_json, read_names
-from data.model import *
+from data.pet import (
+    PetDocument,
+    PetToken,
+    PetEntity,
+    PetRelation,
+    PetMention,
+    NewPetFormatImporter,
+)
