@@ -1,7 +1,5 @@
 from augment.base import AugmentationStep
-from augment.augmenter import run_augmentation
-from augment.augmenter import run_augmentation_old
-from augment.example import ExampleAugmentationStep
+from augment.augmenter import Augmenter, run_augmentation
 
 from augment.trafo3 import Trafo3Step
 from augment.trafo5 import Trafo5Step

@@ -2,14 +2,11 @@ import typing
 
 from nltk.corpus import wordnet
 
-from augment import base
+from augment import base, params
 from data import model
 
 
 class Trafo3Step(base.BaseTokenReplacementStep):
-    def __init__(self, dataset: typing.List[model.Document], n: int = 10):
-        super().__init__(dataset, n)
-
     def get_replacement_candidates(
         self, document: model.Document
     ) -> typing.List[typing.List[model.Token]]:
@@ -36,3 +33,10 @@ class Trafo3Step(base.BaseTokenReplacementStep):
         antonyms.sort(key=lambda x: str(x).split(".")[2])
         antonym = antonyms[0].name()
         return antonym.split("_")
+
+    def get_params(self) -> typing.List[typing.Union[params.Param]]:
+        return [
+            params.IntegerParam(
+                name="replacements_per_sentence", min_value=1, max_value=20
+            ),
+        ]

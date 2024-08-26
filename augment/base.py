@@ -1,5 +1,6 @@
 import abc
 import inspect
+import itertools
 import random
 import typing
 
@@ -15,7 +16,9 @@ class AugmentationStep(abc.ABC):
         self.dataset = dataset
 
     @abc.abstractmethod
-    def do_augment(self, doc: model.Document) -> model.Document:
+    def do_augment(
+        self, doc: model.Document, num_augments: int
+    ) -> typing.List[model.Document]:
         raise NotImplementedError()
 
     @staticmethod
@@ -72,13 +75,18 @@ class AugmentationStep(abc.ABC):
 
 
 class BaseTokenReplacementStep(AugmentationStep, abc.ABC):
-    def __init__(self, dataset: typing.List[model.Document], n: int):
-        super().__init__(dataset)
-        self.n = n
+    def __init__(
+        self,
+        dataset: typing.List[model.Document],
+        replacements_per_sentence: int,
+        **kwargs,
+    ):
+        super().__init__(dataset, **kwargs)
+        self.replacements_per_sentence = replacements_per_sentence
 
     @staticmethod
     def get_params() -> typing.List[typing.Union[params.Param]]:
-        return [params.IntegerParam(name="n", min_value=1, max_value=20)]
+        return []
 
     @abc.abstractmethod
     def get_replacement_candidates(
@@ -92,12 +100,10 @@ class BaseTokenReplacementStep(AugmentationStep, abc.ABC):
     ) -> typing.Optional[typing.List[str]]:
         raise NotImplementedError()
 
-    def do_augment(self, doc: model.Document) -> model.Document:
+    def augment_single_doc(
+        self, doc: model.Document, candidates: typing.List[typing.List[model.Token]]
+    ) -> model.Document:
         doc = doc.copy()
-        candidates = self.get_replacement_candidates(doc)
-        random.shuffle(candidates)
-
-        num_changed = 0
         for candidate in candidates:
             replacement_tokens = self.get_replacement(candidate)
             if replacement_tokens is None:
@@ -109,11 +115,13 @@ class BaseTokenReplacementStep(AugmentationStep, abc.ABC):
                 len(doc.relations),
             )
 
-            print(f"Replacing '{' '.join(t.text for t in candidate)}' "
-                  f"(sentence {candidate[0].sentence_index}, "
-                  f"tokens {candidate[0].index_in_sentence(doc)} - "
-                  f"{candidate[-1].index_in_sentence(doc) + 1}) "
-                  f"with '{' '.join(replacement_tokens)}'.")
+            print(
+                f"Replacing '{' '.join(t.text for t in candidate)}' "
+                f"(sentence {candidate[0].sentence_index}, "
+                f"tokens {candidate[0].index_in_sentence(doc)} - "
+                f"{candidate[-1].index_in_sentence(doc) + 1}) "
+                f"with '{' '.join(replacement_tokens)}'."
+            )
 
             tokenmanager.replace_sequence_text_in_sentence(
                 doc,
@@ -134,12 +142,27 @@ class BaseTokenReplacementStep(AugmentationStep, abc.ABC):
                 f"This must not happen! Before augmentation there were {num_annotations_before} "
                 f"mentions, entities and relations, now there are {num_annotations_after}."
             )
+        return doc
 
-            num_changed += 1
-            if num_changed == self.n:
+    def do_augment(
+        self, doc: model.Document, num_augments: int
+    ) -> typing.List[model.Document]:
+        all_candidates = self.get_replacement_candidates(doc)
+        random.shuffle(all_candidates)
+
+        planned_replacements = [all_candidates]
+        if len(all_candidates) > self.replacements_per_sentence:
+            planned_replacements = itertools.combinations(
+                all_candidates, r=self.replacements_per_sentence
+            )
+
+        docs = []
+        for planned_replacement in planned_replacements:
+            docs.append(self.augment_single_doc(doc, planned_replacement))
+            if len(docs) >= num_augments:
                 break
 
-        return doc
+        return docs
 
 
 class AbbreviationStep(AugmentationStep, abc.ABC):

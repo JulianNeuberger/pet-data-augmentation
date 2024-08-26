@@ -7,19 +7,29 @@ from transformations import tokenmanager
 
 
 class Trafo24Step(base.AugmentationStep):
-    def __init__(self, dataset: typing.List[model.Document], n: int):
+    def __init__(self, dataset: typing.List[model.Document]):
         super().__init__(dataset)
-        self.n = n
 
     @staticmethod
     def get_params() -> typing.List[typing.Union[params.Param]]:
-        return [
-            params.IntegerParam(name="n", min_value=1, max_value=20),
-        ]
+        return []
 
-    def do_augment(self, doc: model.Document) -> model.Document:
+    def do_augment(
+        self, doc: model.Document, num_augments: int
+    ) -> typing.List[model.Document]:
         doc = doc.copy()
-        for _ in range(self.n):
+        doc += model.Document()
+
+        # can only produce a single augmented document,
+        # as there are not enough sentences in this document
+        if num_augments >= len(doc.sentences):
+            for i in reversed(range(len(doc.sentences))):
+                self.merge_sentences(i, doc)
+            return [doc]
+
+        # can produce several variations
+
+        for _ in range(self.num_merged_sentences):
             num_sentences = len(doc.sentences)
             if num_sentences == 1:
                 return doc
@@ -38,9 +48,7 @@ class Trafo24Step(base.AugmentationStep):
         second_sentence = doc.sentences[second_index]
 
         last_token = first_sentence.tokens[-1]
-        tokenmanager.delete_token(
-            doc, index_in_document=last_token.index_in_document
-        )
+        tokenmanager.delete_token(doc, index_in_document=last_token.index_in_document)
         first_sentence_length = len(first_sentence.tokens)
 
         for sentence in doc.sentences[second_index:]:

@@ -11,11 +11,10 @@ import data
 import pipeline
 from augment import params
 from data import loader, model
-from main import cross_validate_pipeline
 
 strategies: typing.List[typing.Type[augment.AugmentationStep]] = [
     # augment.Trafo3Step,
-    # augment.Trafo5Step,
+    augment.Trafo5Step,
     # augment.Trafo6Step,
     # augment.Trafo8Step,  # long runtime
     # augment.Trafo24Step,
@@ -26,7 +25,7 @@ strategies: typing.List[typing.Type[augment.AugmentationStep]] = [
     # augment.Trafo52Step,
     # augment.Trafo58Step,  # runs too long?
     # augment.Trafo62Step,  # runs too long
-    augment.Trafo79Step,
+    # augment.Trafo79Step,
     # augment.Trafo82Step,
     # augment.Trafo86HyponymReplacement,
     # augment.Trafo86HypernymReplacement,
@@ -39,7 +38,7 @@ strategies: typing.List[typing.Type[augment.AugmentationStep]] = [
     # augment.Trafo110Step,
     # augment.TrafoNullStep,
     # augment.TrafoInsertStep,
-    augment.TrafoRandomSwapStep
+    # augment.TrafoRandomSwapStep,
     # augment.CheatingTransformationStep,
 ]
 
@@ -72,9 +71,9 @@ def suggest_param(param: params.Param, trial: optuna.Trial) -> typing.Any:
 
 
 def instantiate_step(
-    step_class: typing.Type[augment.AugmentationStep],
-    trial: optuna.Trial,
-    dataset: typing.List[model.Document],
+        step_class: typing.Type[augment.AugmentationStep],
+        trial: optuna.Trial,
+        dataset: typing.List[model.Document],
 ) -> augment.AugmentationStep:
     suggested_params = {
         p.name: suggest_param(p, trial) for p in step_class.get_params()
@@ -83,20 +82,20 @@ def instantiate_step(
 
 
 def objective_factory(
-    augmenter_class: typing.Type[augment.AugmentationStep],
-    pipeline_step_class: typing.Type[pipeline.PipelineStep],
-    documents: typing.List[data.Document],
-    **kwargs,
+        augmenter_class: typing.Type[augment.AugmentationStep],
+        pipeline_step_class: typing.Type[pipeline.PipelineStep],
+        documents: typing.List[data.Document],
+        fold_indices: typing.List[typing.Tuple[typing.Iterable[int], typing.Iterable[int]]],
+        un_augmented_f1: float,
+        **kwargs,
 ):
     def objective(trial: optuna.Trial):
-        kf = sklearn.model_selection.KFold(
-            n_splits=5, random_state=random_state, shuffle=True
-        )
+
         augmentation_rate = trial.suggest_float("augmentation_rate", low=0.0, high=10.0)
         un_augmented_train_folds = []
         augmented_train_folds: typing.List[typing.List[data.Document]] = []
         test_folds = []
-        for train_indices, test_indices in kf.split(documents):
+        for train_indices, test_indices in fold_indices:
             test_documents = [documents[i] for i in test_indices]
             un_augmented_train_documents = [documents[i] for i in train_indices]
 
@@ -104,8 +103,8 @@ def objective_factory(
                 augmenter_class, trial, un_augmented_train_documents
             )
 
-            augmented_train_documents, _ = augment.run_augmentation(
-                un_augmented_train_documents, step, augmentation_rate
+            augmented_train_documents = augment.run_augmentation(
+                un_augmented_train_documents, [step], augmentation_rate
             )
             random.shuffle(augmented_train_documents)
             augmented_train_folds.append(augmented_train_documents)
@@ -120,7 +119,7 @@ def objective_factory(
         augmented_pipeline_step = pipeline_step_class(
             name="crf mention extraction", **kwargs
         )
-        augmented_results = cross_validate_pipeline(
+        augmented_results = pipeline.cross_validate_pipeline(
             p=pipeline.Pipeline(
                 name=f"augmentation-{pipeline_step_class.__name__}",
                 steps=[augmented_pipeline_step],
@@ -130,23 +129,7 @@ def objective_factory(
             save_results=False,
         )
 
-        unaugmented_pipeline_step = pipeline_step_class(
-            name="crf mention extraction", **kwargs
-        )
-        un_augmented_results = cross_validate_pipeline(
-            p=pipeline.Pipeline(
-                name=f"augmentation-{pipeline_step_class.__name__}",
-                steps=[unaugmented_pipeline_step],
-            ),
-            train_folds=un_augmented_train_folds,
-            test_folds=test_folds,
-            save_results=False,
-        )
-
         augmented_f1 = augmented_results[augmented_pipeline_step].overall_scores.f1
-        un_augmented_f1 = un_augmented_results[
-            unaugmented_pipeline_step
-        ].overall_scores.f1
         improvement = augmented_f1 - un_augmented_f1
         print(f"Improvement of {improvement:.2%}")
         return improvement
@@ -177,8 +160,43 @@ def main():
             raise AssertionError("\n".join([str(e) for e in errors]))
 
     all_documents = loader.read_documents_from_json("./jsonl/all.jsonl")
+    kf = sklearn.model_selection.KFold(
+        n_splits=5, random_state=random_state, shuffle=True
+    )
+    fold_indices = list(kf.split(all_documents))
+
     # pipeline_step_class = pipeline.CrfMentionEstimatorStep
     pipeline_step_class = pipeline.CatBoostRelationExtractionStep
+
+    kwargs = {
+        "num_trees": 100,
+        "device": device,
+        "device_ids": device_ids,
+    }
+
+    train_folds: typing.List[typing.List[data.Document]] = []
+    test_folds: typing.List[typing.List[data.Document]] = []
+    for train_indices, test_indices in fold_indices:
+        test_documents = [all_documents[i] for i in test_indices]
+        train_documents = [all_documents[i] for i in train_indices]
+        train_folds.append(train_documents)
+        test_folds.append(test_documents)
+
+    unaugmented_pipeline_step = pipeline_step_class(
+        name="crf mention extraction", **kwargs
+    )
+    un_augmented_results = pipeline.cross_validate_pipeline(
+        p=pipeline.Pipeline(
+            name=f"augmentation-{pipeline_step_class.__name__}",
+            steps=[unaugmented_pipeline_step],
+        ),
+        train_folds=train_folds,
+        test_folds=test_folds,
+        save_results=False,
+    )
+    un_augmented_f1 = un_augmented_results[
+        unaugmented_pipeline_step
+    ].overall_scores.f1
 
     for strategy_class in strategies:
         print(f"Running optimization for strategy {strategy_class.__name__}")
@@ -186,15 +204,15 @@ def main():
             strategy_class,
             pipeline_step_class,
             all_documents,
-            num_trees=100,
-            device=device,
-            device_ids=device_ids,
+            fold_indices,
+            un_augmented_f1,
+            **kwargs,
         )
         study = optuna.create_study(
             direction="maximize",
             load_if_exists=True,
             study_name=f"{strategy_class.__name__}-{pipeline_step_class.__name__}",
-            storage="mysql://optuna@localhost/pet_data_augment",
+            # storage="mysql://optuna@localhost/pet_data_augment",
         )
         trials = study.get_trials(states=(optuna.trial.TrialState.COMPLETE,))
         if len(trials) >= max_runs_per_step:

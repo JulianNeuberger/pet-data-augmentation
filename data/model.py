@@ -112,6 +112,83 @@ class Document:
             entities=[] if clear_entities else [e.copy() for e in self.entities],
         )
 
+    def merge(self, other: "Document"):
+        doc = Document(
+            text=self.text + " " + other.text,
+            name=self.name + "_" + other.name,
+        )
+
+        token_offset = len(self.tokens)
+        sentence_offset = len(self.sentences)
+
+        new_sentences = [s.copy() for s in self.sentences]
+        for s in other.sentences:
+            s = s.copy()
+            for t in s.tokens:
+                t.index_in_document += token_offset
+                t.sentence_index += sentence_offset
+            new_sentences.append(s)
+
+        new_mentions = [m.copy() for m in self.mentions]
+        for i, m in enumerate(other.mentions):
+            m = m.copy()
+            m.sentence_index += sentence_offset
+            new_mentions.append(m)
+
+        mention_offset = len(self.mentions)
+
+        new_entities = [m.copy() for m in self.entities]
+        for e in other.entities:
+            e = e.copy()
+            e.mention_indices = [i + mention_offset for i in e.mention_indices]
+            new_entities.append(e)
+
+        new_relations = [r.copy() for r in self.relations]
+        for r in other.relations:
+            r = r.copy()
+            r.head_entity_index
+
+        new_mentions = self.mentions
+        new_mention_ids = {}
+        for i, mention in enumerate(other.mentions):
+            if mention not in new_mentions:
+                new_mention_ids[i] = len(new_mentions)
+                new_mentions.append(mention)
+            else:
+                new_mention_ids[i] = new_mentions.index(mention)
+
+        new_entities = self.entities
+        for entity in other.entities:
+            mention_indices = [new_mention_ids[i] for i in entity.mention_indices]
+            new_entity = PetEntity(mention_indices=tuple(mention_indices))
+            if new_entity not in new_entities:
+                new_entities.append(new_entity)
+
+        new_relations = self.relations
+        for relation in other.relations:
+            if relation.head_mention_index not in new_mention_ids:
+                continue
+            if relation.tail_mention_index not in new_mention_ids:
+                continue
+            new_relation = PetRelation(
+                type=relation.type,
+                head_mention_index=new_mention_ids[relation.head_mention_index],
+                tail_mention_index=new_mention_ids[relation.tail_mention_index],
+            )
+            if new_relation not in new_relations:
+                new_relations.append(new_relation)
+
+        return PetDocument(
+            name=self.name,
+            text=self.text,
+            id=self.id,
+            category=self.category,
+            tokens=self.tokens,
+            mentions=new_mentions,
+            entities=new_entities,
+            relations=new_relations,
+        )
+
     @property
     def tokens(self):
         ret = []

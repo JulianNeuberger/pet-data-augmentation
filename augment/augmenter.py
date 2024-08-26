@@ -1,55 +1,97 @@
 import copy
+import math
+import random
 import typing
 from random import shuffle
 
+import numpy as np
 import tqdm
 
 from augment import base
 from data import model
 
-# Author: Leonie
-def run_augmentation_old(dataset: typing.List[model.Document], step: base.AugmentationStep) -> typing.List[model.Document]:
-    return [step.do_augment(doc) for doc in dataset]
+
+class Augmenter:
+    def __init__(
+        self, steps: typing.List[base.AugmentationStep], num_augmentations: int
+    ):
+        self._steps = steps
+        self._num_augmentations = num_augmentations
+        self._augmented_docs: typing.Dict[str, typing.List[model.Document]] = {}
+
+    def augment(self, document: model.Document) -> typing.List[model.Document]:
+        if document.name not in self._augmented_docs:
+            self._augmented_docs[document.name] = self._run_augmentation(document)
+        return [d.copy() for d in self._augmented_docs[document.name]]
+
+    def _run_augmentation(
+        self,
+        document: model.Document,
+    ) -> typing.List[model.Document]:
+        self._augmented_docs[document.name] = []
+        # apply first step with the actual augmentation rate
+        augmented_documents = self._steps[0].do_augment(
+            document, self._num_augmentations
+        )
+
+        # apply all remaining steps on each augmented doc,
+        # but only create one augmented document
+        for augmented_doc in augmented_documents:
+            for step in self._steps[1:]:
+                augmented_doc = step.do_augment(augmented_doc, 1)
+            self._augmented_docs[document.name].append(augmented_doc)
+        return self._augmented_docs[document.name]
 
 
-# Author: Benedikt
-def run_augmentation(dataset: typing.List[model.Document], step: base.AugmentationStep, aug_rate):
-    num_of_doc_to_aug = int(len(dataset) * aug_rate)
-    print(f'Augmenting {len(dataset)} documents with '
-          f'augmentation factor of {aug_rate:.4f} '
-          f'using strategy {step.__class__.__name__}...')
-    extended_dataset = []
-    ds = copy.deepcopy(dataset)
-    indices = []
-    for i in range(len(dataset)):
-        indices.append(i)
-    shuffle(indices)
-    for i in range(num_of_doc_to_aug):
-        if i < len(ds):
-            index = indices[i]
-            extended_dataset.append(ds[index])
-        else:
-            x = i % len(ds)
-            index = indices[x]
-            extended_dataset.append(ds[index])
-    unaug_dataset = copy.deepcopy(dataset)
-    ext_ds = copy.deepcopy(extended_dataset)
-    unaug_dataset.extend(ext_ds)
-    aug_dataset = []
+def get_augmentation_rates(num_documents: int, augmentation_rate: float) -> np.ndarray:
+    augmentation_rates_per_document = np.zeros(num_documents, dtype=int)
 
-    for doc in tqdm.tqdm(extended_dataset):
-        aug_dataset.append(step.do_augment(doc))
+    if augmentation_rate >= 1.0:
+        augmentation_rates_per_document += int(augmentation_rate)
+        augmentation_rate -= int(augmentation_rate)
 
-    #aug_dataset = [step.do_augment(doc) for doc in extended_dataset]
-    aug_data = copy.deepcopy(dataset)
-    aug_data.extend(aug_dataset)
-    indices2 = []
-    for i in range(len(unaug_dataset)):
-        indices2.append(i)
-    shuffle(indices2)
-    unaug_dataset_shuff = []
-    aug_dataset_shuff = []
-    for i in range(len(indices2)):
-        unaug_dataset_shuff.append(unaug_dataset[indices2[i]])
-        aug_dataset_shuff.append(aug_data[indices2[i]])
-    return aug_dataset_shuff, unaug_dataset_shuff
+    num_additional_augmentations = int(augmentation_rate * num_documents)
+    additional_augmentation_indices = np.random.choice(
+        np.arange(num_documents), size=num_additional_augmentations, replace=False
+    )
+    augmentation_rates_per_document[additional_augmentation_indices] += 1
+    return augmentation_rates_per_document
+
+
+def run_augmentation(
+    dataset: typing.List[model.Document],
+    steps: typing.List[base.AugmentationStep],
+    augmentation_rate: float,
+) -> typing.List[model.Document]:
+    augmentation_rate_per_document = get_augmentation_rates(
+        len(dataset), augmentation_rate
+    )
+
+    print(
+        f"Augmenting {len(dataset)} documents with "
+        f"augmentation factor of {augmentation_rate:.4f} "
+        f"resulting in {np.sum(augmentation_rate_per_document)} new documents "
+        f"using strategies {[type(s).__name__ for s in steps]}..."
+    )
+
+    augmented_dataset: typing.List[model.Document] = []
+
+    for i, document in tqdm.tqdm(enumerate(dataset), total=len(dataset)):
+        current_aug_rate = augmentation_rate_per_document[i]
+        # apply first step with the actual augmentation rate
+        augmented_docs = steps[0].do_augment(document, current_aug_rate)
+
+        # apply all remaining steps on each augmented doc,
+        # but only create one augmented document
+        for augmented_doc in augmented_docs:
+            for step in steps[1:]:
+                augmented_doc = step.do_augment(augmented_doc, 1)
+            augmented_dataset.append(augmented_doc)
+
+    # add original dataset
+    augmented_dataset.extend([d.copy() for d in dataset])
+
+    # finally, shuffle the augmented dataset
+    random.shuffle(augmented_dataset)
+
+    return augmented_dataset

@@ -12,12 +12,12 @@ class Trafo8Step(base.BaseTokenReplacementStep):
     def __init__(
         self,
         dataset: typing.List[model.Document],
-        n: int = 1,
+        replacements_per_sentence: int,
         num_beams: int = 2,
         lang: str = "de",
         device: str = "cpu",
     ):
-        super().__init__(dataset, n)
+        super().__init__(dataset, replacements_per_sentence)
         self.device = device
         self.lang = lang
         self.num_beams = num_beams
@@ -36,7 +36,9 @@ class Trafo8Step(base.BaseTokenReplacementStep):
     @staticmethod
     def get_params() -> typing.List[typing.Union[params.Param]]:
         return [
-            params.IntegerParam(name="n", min_value=1, max_value=20),
+            params.IntegerParam(
+                name="replacements_per_sentence", min_value=1, max_value=20
+            ),
             params.IntegerParam(name="num_beams", min_value=1, max_value=20),
         ]
 
@@ -69,16 +71,16 @@ class Trafo8Step(base.BaseTokenReplacementStep):
             print("Returning Default due to Run Time Exception")
             return None
 
-    def en2de(self, input):
-        input_ids = self.tokenizer_en_de.encode(input, return_tensors="pt").to(self.device)
+    def en2de(self, en: str) -> str:
+        input_ids = self.tokenizer_en_de.encode(en, return_tensors="pt").to(self.device)
         outputs = self.model_en_de.generate(input_ids)
         decoded = self.tokenizer_en_de.decode(
             outputs[0].to(self.device), skip_special_tokens=True
         )
         return decoded
 
-    def de2en(self, input):
-        input_ids = self.tokenizer_de_en.encode(input, return_tensors="pt").to(self.device)
+    def de2en(self, de: str) -> str:
+        input_ids = self.tokenizer_de_en.encode(de, return_tensors="pt").to(self.device)
         outputs = self.model_de_en.generate(
             input_ids,
             num_return_sequences=self.max_outputs,
