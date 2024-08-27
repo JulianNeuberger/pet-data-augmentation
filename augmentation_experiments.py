@@ -14,7 +14,7 @@ from data import loader, model
 
 strategies: typing.List[typing.Type[augment.AugmentationStep]] = [
     # augment.Trafo3Step,
-    augment.Trafo5Step,
+    augment.EvenAntonymsSubstitute,
     # augment.Trafo6Step,
     # augment.Trafo8Step,  # long runtime
     # augment.Trafo24Step,
@@ -71,9 +71,9 @@ def suggest_param(param: params.Param, trial: optuna.Trial) -> typing.Any:
 
 
 def instantiate_step(
-        step_class: typing.Type[augment.AugmentationStep],
-        trial: optuna.Trial,
-        dataset: typing.List[model.Document],
+    step_class: typing.Type[augment.AugmentationStep],
+    trial: optuna.Trial,
+    dataset: typing.List[model.Document],
 ) -> augment.AugmentationStep:
     suggested_params = {
         p.name: suggest_param(p, trial) for p in step_class.get_params()
@@ -82,12 +82,12 @@ def instantiate_step(
 
 
 def objective_factory(
-        augmenter_class: typing.Type[augment.AugmentationStep],
-        pipeline_step_class: typing.Type[pipeline.PipelineStep],
-        documents: typing.List[data.Document],
-        fold_indices: typing.List[typing.Tuple[typing.Iterable[int], typing.Iterable[int]]],
-        un_augmented_f1: float,
-        **kwargs,
+    augmenter_class: typing.Type[augment.AugmentationStep],
+    pipeline_step_class: typing.Type[pipeline.PipelineStep],
+    documents: typing.List[data.Document],
+    fold_indices: typing.List[typing.Tuple[typing.Iterable[int], typing.Iterable[int]]],
+    un_augmented_f1: float,
+    **kwargs,
 ):
     def objective(trial: optuna.Trial):
 
@@ -194,9 +194,7 @@ def main():
         test_folds=test_folds,
         save_results=False,
     )
-    un_augmented_f1 = un_augmented_results[
-        unaugmented_pipeline_step
-    ].overall_scores.f1
+    un_augmented_f1 = un_augmented_results[unaugmented_pipeline_step].overall_scores.f1
 
     for strategy_class in strategies:
         print(f"Running optimization for strategy {strategy_class.__name__}")

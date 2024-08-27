@@ -125,10 +125,10 @@ def test_do_augment():
         text="",
     )
 
-    trafo = trafo26.Trafo26Step(dataset=[document], n=1, tag_groups=[pos_enum.Pos.NOUN, pos_enum.Pos.VERB])
+    trafo = trafo26.ContextualMeaningPerturbation(
+        dataset=[document], n=1, tag_groups=[pos_enum.Pos.NOUN, pos_enum.Pos.VERB]
+    )
 
     augmented = trafo.do_augment(document)
 
     assert augmented != document
-
-

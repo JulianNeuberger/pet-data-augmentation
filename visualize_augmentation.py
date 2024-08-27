@@ -18,11 +18,11 @@ sns.set_theme()
 plt.rcParams["font.family"] = "CMU Serif"
 
 transformation_classes: typing.List[typing.Type[augment.AugmentationStep]] = [
-    augment.Trafo3Step,
-    augment.Trafo5Step,
-    augment.Trafo6Step,
+    augment.AntonymReplacementStep,
+    augment.EvenAntonymsSubstitute,
+    augment.AuxiliaryNegationRemoval,
     augment.Trafo8Step,  # long runtime
-    augment.Trafo24Step,
+    augment.MergeDocumentsStep,
     augment.Trafo26Step,
     augment.Trafo39Step,
     augment.Trafo40Step,
@@ -193,7 +193,7 @@ def build_plot_data():
 
             loaded_trafos = [p["name"] for p in plot_data]
             if name in loaded_trafos:
-                print('Already loaded, continuing')
+                print("Already loaded, continuing")
                 continue
 
             base_dir = os.path.join("jsonl", "augmented")
@@ -242,13 +242,17 @@ def augmentation_effect_figure(df: pd.DataFrame):
     original_data = df.loc[["Original"]]
     print(original_data)
 
-    print('------------------')
+    print("------------------")
     print(df["span_length"])
-    print('------------------')
+    print("------------------")
     print(original_data["span_length"])
-    print('------------------')
-    df["vocab_size"] = (df["vocab_size"] - original_data["vocab_size"].item()) / original_data["vocab_size"].item()
-    df["span_length"] = (df["span_length"] - original_data["span_length"].item()) / original_data["span_length"].item()
+    print("------------------")
+    df["vocab_size"] = (
+        df["vocab_size"] - original_data["vocab_size"].item()
+    ) / original_data["vocab_size"].item()
+    df["span_length"] = (
+        df["span_length"] - original_data["span_length"].item()
+    ) / original_data["span_length"].item()
 
     sns.scatterplot(df, x="vocab_size", y="span_length", hue="type")
     ax = plt.gca()
@@ -308,8 +312,10 @@ def data_characteristics_figure(df: pd.DataFrame):
 
 
 if __name__ == "__main__":
+
     def main():
         plot_data = build_plot_data()
         augmentation_effect_figure(plot_data.copy())
         data_characteristics_figure(plot_data.copy())
+
     main()

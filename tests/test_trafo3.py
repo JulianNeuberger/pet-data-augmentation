@@ -1,6 +1,6 @@
 import copy
 
-from augment.trafo3 import Trafo3Step
+from augment.trafo3 import AntonymReplacementStep
 from data import model
 
 
@@ -49,7 +49,7 @@ def test_do_augment():
     # ACT
     # test1
     doc_to_aug1 = copy.deepcopy(doc1)
-    trafo1 = Trafo3Step([doc_to_aug1], 1)
+    trafo1 = AntonymReplacementStep([doc_to_aug1], 1)
     doc_aug1 = trafo1.do_augment(doc_to_aug1)
 
     # test2

@@ -1,11 +1,11 @@
 import copy
 from data import model
-from augment.trafo5 import Trafo5Step
+from augment.trafo5 import EvenAntonymsSubstitute
 
 
 # Author for entire script: Benedikt
 def test_is_ant():
-    trafo = Trafo5Step([])
+    trafo = EvenAntonymsSubstitute([])
 
     # Arrange
     word1 = "evil"
@@ -25,7 +25,7 @@ def test_is_ant():
 
 def test_is_syn():
     # Arrange
-    trafo = Trafo5Step([])
+    trafo = EvenAntonymsSubstitute([])
     word1 = "evil"
     word2 = "good"
     word3 = "people"
@@ -44,7 +44,7 @@ def test_is_syn():
 
 def test_do_augment():
     # Arrange
-    trafo = Trafo5Step([])
+    trafo = EvenAntonymsSubstitute([])
     tokens = []
     tokens.append(
         model.Token(

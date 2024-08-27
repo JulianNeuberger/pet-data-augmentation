@@ -131,7 +131,7 @@ def test_do_augment():
         text="",
     )
 
-    trafo = trafo24.Trafo24Step(dataset=[document], n=1)
+    trafo = trafo24.MergeDocumentsStep(dataset=[document], n=1)
 
     augmented = trafo.do_augment(document)
 
@@ -167,7 +167,9 @@ def test_trafo24_monkey():
         mentions = []
         for _ in range(20):
             sentence_id = random.randrange(0, len(sentences))
-            mention_len = random.randint(1, min(len(sentences[sentence_id].tokens) - 1, 4))
+            mention_len = random.randint(
+                1, min(len(sentences[sentence_id].tokens) - 1, 4)
+            )
             indices_start = random.randint(
                 0, len(sentences[sentence_id].tokens) - mention_len - 1
             )
@@ -226,7 +228,7 @@ def test_trafo24_monkey():
 
     for i in range(10):
         doc = random_doc()
-        trafo = trafo24.Trafo24Step(
+        trafo = trafo24.MergeDocumentsStep(
             dataset=[doc], n=random.randint(1, len(doc.sentences))
         )
 

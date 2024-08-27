@@ -5,13 +5,19 @@ import nltk
 from data import PetDocument, PetToken, PetEntity, PetMention
 
 
-def insert_tokens_inplace(doc: PetDocument, tokens: typing.List[PetToken], index_in_document: int) -> None:
+def insert_tokens_inplace(
+    doc: PetDocument, tokens: typing.List[PetToken], index_in_document: int
+) -> None:
     # first, adjust all mention token indices that are affected
     for m_id, m in enumerate(doc.mentions):
         new_token_ids = []
         affected = False
         # will be true, if the inserted sequence is inside a mention or "touches" it on the right side
-        expanded = min(m.token_document_indices) < index_in_document <= max(m.token_document_indices)
+        expanded = (
+            min(m.token_document_indices)
+            < index_in_document
+            <= max(m.token_document_indices)
+        )
         for token_id in m.token_document_indices:
             if token_id < index_in_document:
                 new_token_ids.append(token_id)
@@ -21,14 +27,15 @@ def insert_tokens_inplace(doc: PetDocument, tokens: typing.List[PetToken], index
         if affected:
             if expanded:
                 # inserted tokens into a mention!
-                new_token_ids += list(range(index_in_document, index_in_document + len(tokens)))
+                new_token_ids += list(
+                    range(index_in_document, index_in_document + len(tokens))
+                )
                 new_token_ids = sorted(new_token_ids)
             doc.mentions[m_id] = PetMention(
-                type=m.type,
-                token_document_indices=tuple(new_token_ids)
+                type=m.type, token_document_indices=tuple(new_token_ids)
             )
 
-    for token in tokens:
+    for token in reversed(tokens):
         doc.tokens.insert(index_in_document, token)
 
     # adjust all following tokens
@@ -38,7 +45,7 @@ def insert_tokens_inplace(doc: PetDocument, tokens: typing.List[PetToken], index
             text=t.text,
             pos_tag=t.pos_tag,
             sentence_index=t.sentence_index,
-            index_in_document=t.index_in_document + len(tokens)
+            index_in_document=t.index_in_document + len(tokens),
         )
 
 
@@ -50,11 +57,23 @@ def delete_token_inplace(doc: PetDocument, token_id: int) -> None:
                 mention_to_remove = m_id
             else:
                 doc.mentions[m_id] = PetMention(
-                    token_document_indices=tuple(i for i in m.token_document_indices if i != token_id),
+                    token_document_indices=tuple(
+                        i for i in m.token_document_indices if i != token_id
+                    ),
                     type=m.type,
                 )
     if mention_to_remove is not None:
         delete_mention_inplace(doc, mention_to_remove)
+
+    doc.tokens.pop(token_id)
+    for i in range(token_id, len(doc.tokens)):
+        t = doc.tokens[i]
+        doc.tokens[i] = PetToken(
+            text=t.text,
+            pos_tag=t.pos_tag,
+            sentence_index=t.sentence_index,
+            index_in_document=t.index_in_document - 1,
+        )
 
 
 def delete_mention_inplace(doc: PetDocument, mention_id: int) -> None:
@@ -81,6 +100,8 @@ def delete_mention_inplace(doc: PetDocument, mention_id: int) -> None:
     if relation_to_remove is not None:
         delete_relation_inplace(doc, relation_to_remove)
 
+    doc.mentions.pop(mention_id)
+
 
 def delete_relation_inplace(doc: PetDocument, relation_id: int) -> None:
     doc.relations.pop(relation_id)
@@ -90,40 +111,58 @@ def delete_entity_inplace(doc: PetDocument, entity_id: int) -> None:
     doc.entities.pop(entity_id)
 
 
-def replace_sequence_inplace(doc: PetDocument, sequence_start: int, sequence_end: int,
-                             replacement: typing.List[str]) -> None:
+def replace_sequence_inplace(
+    doc: PetDocument,
+    sequence_start: int,
+    sequence_end: int,
+    replacement: typing.List[str],
+) -> None:
     old_sequence_length = sequence_end - sequence_start
     new_sequence_length = len(replacement)
 
     replacement_pos = nltk.pos_tag(replacement)
     replacement_indices = range(sequence_start, sequence_start + len(replacement))
-    replacement_sentence_ids = [t.sentence_index for t in doc.tokens[sequence_start:sequence_end]]
+    replacement_sentence_ids = [
+        t.sentence_index for t in doc.tokens[sequence_start:sequence_end]
+    ]
     # pad with last sentence index
-    replacement_sentence_ids += replacement_sentence_ids[-1] * (new_sequence_length - old_sequence_length)
+    replacement_sentence_ids += [replacement_sentence_ids[-1]] * (
+        new_sequence_length - old_sequence_length
+    )
     replacement_tokens = [
-        PetToken(text=t, pos_tag=p, index_in_document=i, sentence_index=s) for t, p, i, s in
-        zip(replacement, replacement_pos, replacement_indices, replacement_sentence_ids)
+        PetToken(text=t, pos_tag=p, index_in_document=i, sentence_index=s)
+        for t, p, i, s in zip(
+            replacement, replacement_pos, replacement_indices, replacement_sentence_ids
+        )
     ]
 
+    print(
+        f"mutating: replacing \"{' '.join(t.text for t in doc.tokens[sequence_start:sequence_end])}\" "
+        f"with \"{' '.join(t.text for t in replacement_tokens)}\""
+    )
+
+    print(f"diff: {old_sequence_length - new_sequence_length}")
+
     if old_sequence_length == new_sequence_length:
-        for i in range(sequence_start, sequence_end):
-            doc.tokens[i] = replacement_tokens[i]
+        for i, replacement_token in enumerate(replacement_tokens):
+            doc.tokens[sequence_start + i] = replacement_token
 
     if old_sequence_length > new_sequence_length:
-        for i in range(sequence_start, sequence_end):
-            if i < len(replacement_tokens):
-                doc.tokens[i] = replacement_tokens[i]
-            else:
-                delete_token_inplace(doc, i)
+        for i, replacement_token in enumerate(replacement_tokens):
+            doc.tokens[sequence_start + i] = replacement_token
+        for _ in range(old_sequence_length - new_sequence_length):
+            delete_token_inplace(doc, sequence_start + new_sequence_length)
 
     if old_sequence_length < new_sequence_length:
-        for i in range(sequence_start, sequence_end):
-            doc.tokens[i] = replacement_tokens[i]
-        insert_tokens_inplace(doc, replacement_tokens[sequence_end:], sequence_end - 1)
+        for i, replacement_token in enumerate(replacement_tokens[:old_sequence_length]):
+            doc.tokens[sequence_start + i] = replacement_token
+        insert_tokens_inplace(
+            doc, replacement_tokens[old_sequence_length:], sequence_end
+        )
 
 
 def replace_mention_text_inplace(
-        doc: PetDocument, mention_index: int, new_token_texts: typing.List[str]
+    doc: PetDocument, mention_index: int, new_token_texts: typing.List[str]
 ) -> None:
     mention = doc.mentions[mention_index]
     replace_sequence_inplace(

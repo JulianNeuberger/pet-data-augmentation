@@ -23,6 +23,9 @@ class PetDocument(
                 return m
         return None
 
+    def token_index_in_sentence(self, token: "PetToken") -> int:
+        return self.sentences[token.sentence_index].index(token)
+
     @property
     def sentences(self) -> typing.List[typing.List["PetToken"]]:
         ret = []
@@ -202,7 +205,7 @@ class PetRelation(base.HasType, base.SupportsPrettyDump[PetDocument]):
         return f"{head} -{self.type}-> {tail}"
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True, eq=True)
 class PetToken:
     text: str
     index_in_document: int

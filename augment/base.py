@@ -7,8 +7,7 @@ import typing
 import nltk.tokenize
 
 from augment import params
-from data import PetDocument, PetToken, PetMention
-from transformations import tokenmanager
+from data import PetDocument, PetToken, PetMention, mutate
 
 
 class AugmentationStep(abc.ABC):
@@ -56,16 +55,20 @@ class AugmentationStep(abc.ABC):
         cur_sequence = [doc.tokens[0]]
         last_mention: typing.Optional[PetMention] = None
         for token in doc.tokens[1:]:
+            cur_mention = doc.get_mention_for_token(token)
+
             if token.sentence_index != cur_sequence[-1].sentence_index:
                 # new sentence started
                 tagged_sequences.append(cur_sequence)
                 cur_sequence = [token]
-            cur_mention = doc.get_mention_for_token(token)
-            if cur_mention != last_mention:
+            elif cur_mention != last_mention:
                 # new mention started
                 tagged_sequences.append(cur_sequence)
                 cur_sequence = [token]
-                last_mention = cur_mention
+            else:
+                cur_sequence.append(token)
+
+            last_mention = cur_mention
         if len(cur_sequence) > 0:
             tagged_sequences.append(cur_sequence)
 
@@ -76,11 +79,11 @@ class BaseTokenReplacementStep(AugmentationStep, abc.ABC):
     def __init__(
         self,
         dataset: typing.List[PetDocument],
-        replacements_per_sentence: int,
+        replacements_per_document: int,
         **kwargs,
     ):
         super().__init__(dataset, **kwargs)
-        self.replacements_per_sentence = replacements_per_sentence
+        self.replacements_per_document = replacements_per_document
 
     @staticmethod
     def get_params() -> typing.List[typing.Union[params.Param]]:
@@ -93,68 +96,119 @@ class BaseTokenReplacementStep(AugmentationStep, abc.ABC):
         raise NotImplementedError()
 
     @abc.abstractmethod
-    def get_replacement(
-        self, candidate: typing.List[PetToken]
-    ) -> typing.Optional[typing.List[str]]:
+    def get_replacements(
+        self,
+        candidate: typing.List[PetToken],
+        num_replacements_per_candidate: int,
+        document: PetDocument,
+    ) -> typing.List[typing.List[str]]:
         raise NotImplementedError()
 
     def augment_single_doc(
-        self, doc: PetDocument, candidates: typing.List[typing.List[PetToken]]
-    ) -> PetDocument:
-        doc = doc.copy(clear=[])
+        self,
+        doc: PetDocument,
+        candidates: typing.List[typing.List[PetToken]],
+        num_augments: int,
+        max_replacements_per_candidate: int,
+    ) -> typing.List[PetDocument]:
+        num_annotations_before = (
+            len(doc.mentions),
+            len(doc.entities),
+            len(doc.relations),
+        )
+
+        if len(candidates) == 0:
+            print("no candidates")
+        candidate_replacements: typing.Dict[
+            typing.Tuple[PetToken, ...], typing.List[typing.List[str]]
+        ] = {}
         for candidate in candidates:
-            replacement_texts = self.get_replacement(candidate)
-            if replacement_texts is None:
+            replacement_texts = self.get_replacements(
+                candidate, max_replacements_per_candidate, doc
+            )
+            # remove identical replacements
+            replacement_texts = [
+                t
+                for t in replacement_texts
+                if " ".join(c.text for c in candidate) != " ".join(r for r in t)
+            ]
+            if len(replacement_texts) == 0:
+                print("no replacement texts generated!")
                 continue
 
-            num_annotations_before = (
-                len(doc.mentions),
-                len(doc.entities),
-                len(doc.relations),
+            candidate_replacements[tuple(candidate)] = replacement_texts
+
+        augmented_docs = []
+        for _ in range(num_augments):
+            changed = False
+            augmented_doc = doc.copy(clear=[])
+            possible_candidates = list(candidate_replacements.keys())
+
+            chosen_candidates: typing.List[typing.Tuple[PetToken, ...]] = []
+            for _ in range(self.replacements_per_document):
+                if len(possible_candidates) == 0:
+                    break
+                chosen_candidate: typing.Tuple[PetToken, ...] = random.choice(
+                    possible_candidates
+                )
+                chosen_candidates.append(chosen_candidate)
+                possible_candidates.remove(chosen_candidate)
+            chosen_candidates = sorted(
+                chosen_candidates,
+                key=lambda c: min(t.index_in_document for t in c),
+                reverse=True,
             )
 
-            print(
-                f"Replacing '{' '.join(t.text for t in candidate)}' "
-                f"(tokens {candidate[0].index_in_document} - "
-                f"{candidate[-1].index_in_document + 1}) "
-                f"with '{' '.join(replacement_texts)}'."
-            )
+            for chosen_candidate in chosen_candidates:
+                replacements = candidate_replacements[chosen_candidate]
+                replacement = random.choice(replacements)
+                replacements.remove(replacement)
+                if len(candidate_replacements[chosen_candidate]) == 0:
+                    del candidate_replacements[chosen_candidate]
 
-            tokenmanager.replace_sequence_inplace(
-                doc,
-                candidate[0].index_in_document,
-                candidate[-1].index_in_document + 1,
-                replacement_texts,
-            )
-
+                print(
+                    f"Replacing \"{' '.join(t.text for t in chosen_candidate)}\" with \"{' '.join(replacement)}\""
+                )
+                mutate.replace_sequence_inplace(
+                    augmented_doc,
+                    chosen_candidate[0].index_in_document,
+                    chosen_candidate[-1].index_in_document + 1,
+                    replacement,
+                )
+                changed = True
             num_annotations_after = (
-                len(doc.mentions),
-                len(doc.entities),
-                len(doc.relations),
+                len(augmented_doc.mentions),
+                len(augmented_doc.entities),
+                len(augmented_doc.relations),
             )
-
             assert num_annotations_before == num_annotations_after, (
                 f"Replacing candidates changed the documents annotations! "
                 f"This must not happen! Before augmentation there were {num_annotations_before} "
                 f"mentions, entities and relations, now there are {num_annotations_after}."
             )
-        return doc
+            if changed:
+                augmented_docs.append(augmented_doc)
+
+        return augmented_docs
 
     def do_augment(
         self, doc: PetDocument, num_augments: int
     ) -> typing.List[PetDocument]:
         all_candidates = self.get_replacement_candidates(doc)
+        print(all_candidates)
         random.shuffle(all_candidates)
 
         planned_replacements = [all_candidates]
-        if len(all_candidates) > self.replacements_per_sentence:
+        if len(all_candidates) > self.replacements_per_document:
             planned_replacements = itertools.combinations(
-                all_candidates, r=self.replacements_per_sentence
+                all_candidates, r=self.replacements_per_document
             )
 
         docs = []
         for planned_replacement in planned_replacements:
-            docs.append(self.augment_single_doc(doc, planned_replacement))
+            docs.extend(
+                self.augment_single_doc(doc, planned_replacement, num_augments, 5)
+            )
             if len(docs) >= num_augments:
                 break
 
@@ -234,7 +288,7 @@ class AbbreviationStep(AugmentationStep, abc.ABC):
             key = " ".join(t.text for t in candidate)
             replace_text = lookup_table[key]
             replace_tokens = nltk.tokenize.word_tokenize(replace_text)
-            tokenmanager.replace_sequence_inplace(doc, start, stop, replace_tokens)
+            mutate.replace_sequence_inplace(doc, start, stop, replace_tokens)
 
     def load_bank110(self):
         sep = "\t"
