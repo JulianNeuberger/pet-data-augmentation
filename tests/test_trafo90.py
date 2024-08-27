@@ -1,4 +1,4 @@
-from augment.trafo90 import Trafo90Step
+from augment.trafo90 import ShuffleWithinSegments
 from data import model
 
 
@@ -97,7 +97,7 @@ def test_do_augment():
         relations=[],
     )
 
-    trafo1 = Trafo90Step([doc], prob=1)
+    trafo1 = ShuffleWithinSegments([doc], prob=1)
     aug = trafo1.do_augment(doc)
 
     print(" ".join(t.text for t in aug.tokens))

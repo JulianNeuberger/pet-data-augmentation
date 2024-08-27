@@ -1,50 +1,46 @@
+import itertools
 import random
 import typing
 
-import spacy
-
 import data
 from augment import base, params
-from data import model
+from data import PetDocument, mutate
 
 
 class Trafo88Step(base.AugmentationStep):
-    def __init__(
-        self,
-        dataset: typing.List[model.Document],
-    ):
-        super().__init__(dataset)
-        self.nlp = spacy.load("en_core_web_sm")
+    def do_augment(
+        self, doc: PetDocument, num_augments: int
+    ) -> typing.List[PetDocument]:
+        swaps = list(itertools.combinations(range(len(doc.sentences)), 2))
+        random.shuffle(swaps)
 
-    def do_augment(self, doc: model.Document) -> model.Document:
-        return self.sentence_reordering(doc)
+        augmented_docs = []
+        for first_sentence, second_sentence in swaps[:num_augments]:
+            augmented_doc = doc.copy(clear=[])
+            mutate.swap_sentences_inplace(
+                augmented_doc, first_sentence, second_sentence
+            )
+            augmented_docs.append(augmented_doc)
+
+        return augmented_docs
 
     @staticmethod
     def get_params() -> typing.List[typing.Union[params.Param]]:
         return []
 
-    @staticmethod
-    def _get_new_ordering(document: model.Document) -> typing.List[int]:
-        new_ids = list(range(len(document.sentences)))
-        random.shuffle(new_ids)
-        return new_ids
 
-    @staticmethod
-    def sentence_reordering(document: data.Document):
-        document = document.copy()
-        new_ids = Trafo88Step._get_new_ordering(document)
-        id_mapping = {old: new for old, new in enumerate(new_ids)}
-        reverse_mapping = {v: k for k, v in id_mapping.items()}
+if __name__ == "__main__":
 
-        for mention in document.mentions:
-            mention.sentence_index = id_mapping[mention.sentence_index]
-        for relation in document.relations:
-            relation.evidence = [id_mapping[e] for e in relation.evidence]
-        for sentence in document.sentences:
-            for token in sentence.tokens:
-                token.sentence_index = id_mapping[token.sentence_index]
-        document.sentences = [
-            document.sentences[reverse_mapping[i]]
-            for i in range(len(document.sentences))
-        ]
-        return document
+    def main():
+        doc = data.pet.NewPetFormatImporter(
+            r"C:\Users\Neuberger\PycharmProjects\pet-data-augmentation\jsonl\all.new.jsonl"
+        ).do_import()[0]
+        step = Trafo88Step([])
+        augs = step.do_augment(doc, 10)
+        print(" ".join(t.text for t in doc.tokens))
+        print("-----------")
+        for a in augs:
+            print(" ".join(t.text for t in a.tokens))
+            print()
+
+    main()

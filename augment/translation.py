@@ -1,10 +1,13 @@
+import random
 import traceback
 import typing
 
+import nltk
 from nltk import tokenize
-from transformers import FSMTForConditionalGeneration, FSMTTokenizer
+from transformers import FSMTForConditionalGeneration, FSMTTokenizer, pipeline
+from transformers import M2M100ForConditionalGeneration, M2M100Tokenizer
 
-import data.pet
+import data
 from augment import base, params
 from data import PetDocument, PetToken
 
@@ -101,14 +104,319 @@ class BackTranslation(base.BaseTokenReplacementStep):
         )
 
 
+class MultiLingualBackTranslation(base.BaseTokenReplacementStep):
+    """
+    https://github.com/GEM-benchmark/NL-Augmenter/tree/main/nlaugmenter/transformations/multilingual_back_translation
+    B.62
+    """
+
+    languages = [
+        "af",
+        "am",
+        "ar",
+        "ast",
+        "az",
+        "ba",
+        "be",
+        "bg",
+        "bn",
+        "br",
+        "bs",
+        "ca",
+        "ceb",
+        "cs",
+        "cy",
+        "da",
+        "de",
+        "el",
+        "en",
+        "es",
+        "et",
+        "fa",
+        "ff",
+        "fi",
+        "fr",
+        "fy",
+        "ga",
+        "gd",
+        "gl",
+        "gu",
+        "ha",
+        "he",
+        "hi",
+        "hr",
+        "ht",
+        "hu",
+        "hy",
+        "id",
+        "ig",
+        "ilo",
+        "is",
+        "it",
+        "ja",
+        "jv",
+        "ka",
+        "kk",
+        "km",
+        "kn",
+        "ko",
+        "lb",
+        "lg",
+        "ln",
+        "lo",
+        "lt",
+        "lv",
+        "mg",
+        "mk",
+        "ml",
+        "mn",
+        "mr",
+        "ms",
+        "my",
+        "ne",
+        "nl",
+        "no",
+        "ns",
+        "oc",
+        "or",
+        "pa",
+        "pl",
+        "ps",
+        "pt",
+        "ro",
+        "ru",
+        "sd",
+        "si",
+        "sk",
+        "sl",
+        "so",
+        "sq",
+        "sr",
+        "ss",
+        "su",
+        "sv",
+        "sw",
+        "ta",
+        "th",
+        "tl",
+        "tn",
+        "tr",
+        "uk",
+        "ur",
+        "uz",
+        "vi",
+        "wo",
+        "xh",
+        "yi",
+        "yo",
+        "zh",
+        "zu",
+    ]
+
+    def __init__(
+        self,
+        dataset: typing.List[PetDocument],
+        n: int = 10,
+        pivot_language: str = "de",
+    ):
+        super().__init__(dataset, n)
+        self.model = M2M100ForConditionalGeneration.from_pretrained(
+            "facebook/m2m100_418M"
+        )
+        self.tokenizer = M2M100Tokenizer.from_pretrained("facebook/m2m100_418M")
+        self.src_lang = "en"
+        self.pivot_lang = pivot_language
+
+    @staticmethod
+    def get_params() -> typing.List[typing.Union[params.Param]]:
+        return [
+            params.ChoiceParam(
+                name="pivot_language", choices=MultiLingualBackTranslation.languages
+            ),
+            params.IntegerParam(name="n", min_value=1, max_value=20),
+        ]
+
+    def get_replacement_candidates(
+        self, doc: PetDocument
+    ) -> typing.List[typing.List[PetToken]]:
+        return self.get_sequences(doc)
+
+    def get_replacements(
+        self,
+        candidate: typing.List[PetToken],
+        num_replacements_per_candidate: int,
+        document: PetDocument,
+    ) -> typing.List[typing.List[str]]:
+        sentence = " ".join(t.text for t in candidate)
+        candidate_translations = self.back_translate(
+            sentence, num_translations=num_replacements_per_candidate
+        )
+        translation_tokens = []
+        for t in candidate_translations:
+            translation_tokens.append(tokenize.word_tokenize(t))
+        return translation_tokens
+
+    def back_translate(self, sentence: str, num_translations: int):
+        pivot_sentences = self.translate(
+            [sentence],
+            self.src_lang,
+            self.pivot_lang,
+            self.model,
+            self.tokenizer,
+            num_translations,
+        )
+        back_translated = self.translate(
+            pivot_sentences,
+            self.pivot_lang,
+            self.src_lang,
+            self.model,
+            self.tokenizer,
+            2,
+        )
+
+        results = []
+        for translation in back_translated:
+            if translation.lower() != sentence.lower():
+                results.append(translation)
+        return results
+
+    @staticmethod
+    def translate(
+        sentences: typing.List[str],
+        source_lang: str,
+        target_lang: str,
+        translation_model,
+        tokenizer,
+        num_translations: int,
+    ) -> typing.List[str]:
+        tokenizer.src_lang = source_lang
+        inputs = tokenizer(sentences, return_tensors="pt", padding=True)
+        outputs = translation_model.generate(
+            **inputs,
+            forced_bos_token_id=tokenizer.get_lang_id(target_lang),
+            num_return_sequences=num_translations,
+        )
+        target_sentences = tokenizer.batch_decode(outputs, skip_special_tokens=True)
+        return target_sentences
+
+
+class LostInTranslation(base.BaseTokenReplacementStep):
+    """
+    https://github.com/GEM-benchmark/NL-Augmenter/blob/main/nlaugmenter/transformations/lost_in_translation/
+    B.52
+    """
+
+    def __init__(
+        self,
+        dataset: typing.List[PetDocument],
+        languages: typing.List[str],
+        strategy: str = "strict",
+        num_translation_hops: int = 5,
+        n: int = 10,
+        device: typing.Optional[int] = 0,
+    ):
+        super().__init__(dataset, replacements_per_document=5)
+        self.languages = languages
+        self.n = n
+        self.strategy = strategy
+        self.num_translation_hops = num_translation_hops
+
+        self.encoders = {
+            lang: pipeline(
+                "translation_en_to_{}".format(lang),
+                model="Helsinki-NLP/opus-mt-en-{}".format(lang),
+                device=device,
+            )
+            for lang in self.languages
+        }
+
+        self.decoders = {
+            lang: pipeline(
+                "translation_{}_to_en".format(lang),
+                model="Helsinki-NLP/opus-mt-{}-en".format(lang),
+                device=device,
+            )
+            for lang in self.languages
+        }
+
+    @staticmethod
+    def get_params() -> typing.List[typing.Union[params.Param]]:
+        return [
+            params.IntegerParam(name="n", min_value=1, max_value=20),
+            params.ChoiceParam(
+                name="languages",
+                choices=["es", "de", "zh", "fr", "ru"],
+                max_num_picks=5,
+            ),
+            params.ChoiceParam(
+                name="strategy", choices=["strict", "shuffle", "random"]
+            ),
+            params.IntegerParam(name="num_translations", min_value=1, max_value=5),
+        ]
+
+    def get_replacement_candidates(
+        self, doc: PetDocument
+    ) -> typing.List[typing.List[PetToken]]:
+        candidates = self.get_sequences(doc)
+        candidates = [c for c in candidates if len(c) > 2]
+        return candidates
+
+    def get_replacements(
+        self,
+        candidate: typing.List[PetToken],
+        num_replacements_per_candidate: int,
+        document: PetDocument,
+    ) -> typing.List[typing.List[str]]:
+        candidate_text = " ".join(t.text for t in candidate)
+        replacement_texts = self.encode_decode(candidate_text)
+        return [nltk.tokenize.word_tokenize(t) for t in replacement_texts]
+
+    def encode_decode(self, text: str) -> typing.List[str]:
+        languages = self.languages
+        translations = [text]
+        if self.strategy == "shuffle":
+            languages = random.sample(languages, len(languages))
+        for i in range(self.num_translation_hops):
+            if self.strategy == "random":
+                lang = random.choice(languages)
+            else:
+                lang = languages[i % len(languages)]
+            translations = self.back_translate(translations, lang, 5 if i == 0 else 1)
+        return translations
+
+    def back_translate(
+        self, texts: typing.List[str], language: str, num_translations: int
+    ):
+        print(f"Translating {texts}")
+        encode = self.encoders[language]
+        decode = self.decoders[language]
+
+        encoded = encode(
+            texts,
+            max_length=600,
+            num_return_sequences=num_translations,
+            num_beams=num_translations,
+        )
+        if num_translations > 1:
+            encoded = encoded[0]
+
+        encoded = [t["translation_text"] for t in encoded]
+        decoded = [t["translation_text"] for t in decode(encoded, max_length=600)]
+        return decoded
+
+
 if __name__ == "__main__":
-    doc = data.pet.NewPetFormatImporter(
-        r"C:\Users\Neuberger\PycharmProjects\pet-data-augmentation\jsonl\all.new.jsonl"
-    ).do_import()[0]
-    step = BackTranslation([], 5, 3, lang="de", device="cpu")
-    augs = step.do_augment(doc, 10)
-    print(" ".join(t.text for t in doc.tokens))
-    print("-----------")
-    for a in augs:
-        print(" ".join(t.text for t in a.tokens))
-        print()
+
+    def main():
+        doc = data.pet.NewPetFormatImporter(
+            r"C:\Users\Neuberger\PycharmProjects\pet-data-augmentation\jsonl\all.new.jsonl"
+        ).do_import()[0]
+        step = MultiLingualBackTranslation([], 5, "ms")
+        augs = step.do_augment(doc, 10)
+        print(" ".join(t.text for t in doc.tokens))
+        print("-----------")
+        for a in augs:
+            print(" ".join(t.text for t in a.tokens))
+            print()
+
+    main()

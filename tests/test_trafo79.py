@@ -1,4 +1,4 @@
-from augment.trafo79 import Trafo79Step
+from augment.trafo79 import RandomDeletion
 from data import model
 
 
@@ -54,10 +54,10 @@ def test_do_augment():
         relations=[],
     )
 
-    trafo = Trafo79Step([doc], p=1)
+    trafo = RandomDeletion([doc], p=1)
     augmented = trafo.do_augment(doc)
     assert len(augmented.tokens) == 0
 
-    trafo = Trafo79Step([doc], p=0)
+    trafo = RandomDeletion([doc], p=0)
     augmented = trafo.do_augment(doc)
     assert len(augmented.tokens) == len(doc.tokens)

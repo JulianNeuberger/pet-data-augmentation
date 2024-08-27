@@ -1,11 +1,11 @@
 import copy
 
-from augment.trafo58 import Trafo58Step
+from augment.trafo58 import LostInTranslation
 from data import model
 
 
 def test_do_augment():
-    trafo1 = Trafo58Step([], 1, "zh")
+    trafo1 = LostInTranslation([], 1, "zh")
     tokens1 = [
         model.Token(
             text="I",
@@ -187,8 +187,8 @@ def test_candidate_collection():
         relations=[],
     )
 
-    trafo = Trafo58Step(
-        [doc], ["de", "fr", "ru"], "strict", num_translations=1, n=1, device=-1
+    trafo = LostInTranslation(
+        [doc], ["de", "fr", "ru"], "strict", num_translation_hops=1, n=1, device=-1
     )
 
     candidates = trafo.get_sequences(doc)
@@ -251,8 +251,8 @@ def test_sentence_generation():
         relations=[],
     )
 
-    trafo = Trafo58Step(
-        [doc], ["de", "fr", "ru"], "strict", num_translations=1, n=1, device=-1
+    trafo = LostInTranslation(
+        [doc], ["de", "fr", "ru"], "strict", num_translation_hops=1, n=1, device=-1
     )
 
     augmented = trafo.do_augment(doc)

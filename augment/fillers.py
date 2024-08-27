@@ -1,14 +1,15 @@
 import random
 import typing
 
+import data
 from augment import base, params
-from data import model
-from transformations import tokenmanager
+from data import PetDocument, PetToken, mutate
 
 
-class Trafo40Step(base.AugmentationStep):
+class FillerWordAugmentation(base.AugmentationStep):
     """
-    Based on https://github.com/GEM-benchmark/NL-Augmenter/blob/main/nlaugmenter/transformations/filler_word_augmentation/transformation.py
+    https://github.com/GEM-benchmark/NL-Augmenter/blob/main/nlaugmenter/transformations/filler_word_augmentation
+    B.40
     """
 
     # Speaker opinion/mental state phrases
@@ -51,7 +52,7 @@ class Trafo40Step(base.AugmentationStep):
 
     def __init__(
         self,
-        dataset: typing.List[model.Document],
+        dataset: typing.List[PetDocument],
         n: int = 10,
         insert_speaker_phrases: bool = True,
         insert_uncertainty_phrases: bool = True,
@@ -82,20 +83,38 @@ class Trafo40Step(base.AugmentationStep):
             all_fill += self.fill_phrases
         return all_fill
 
-    def do_augment(self, doc: model.Document) -> model.Document:
-        doc = doc.copy()
+    def do_augment(
+        self, doc: PetDocument, num_augments: int
+    ) -> typing.List[PetDocument]:
         phrases = self.get_phrases()
+        assert len(phrases) > 0
 
-        if len(phrases) == 0:
-            return doc
+        augmented_documents = []
+        for _ in range(num_augments):
+            augmented_doc = doc.copy(clear=[])
+            for _ in range(self.n):
+                index = random.randrange(0, len(augmented_doc.tokens))
+                phrase = random.choice(phrases)
+                phrase_texts = phrase.split()
+                mutate.insert_texts_inplace(augmented_doc, phrase_texts, index)
+            augmented_documents.append(augmented_doc)
 
-        for _ in range(self.n):
-            index = random.randrange(0, len(doc.tokens))
-            phrase = random.choice(phrases)
-            phrase_tokens = phrase.split()
+        return augmented_documents
 
-            for phrase_token_id, phrase_token in enumerate(phrase_tokens):
-                tokenmanager.insert_token_text_into_document(
-                    doc, phrase_token, index + phrase_token_id
-                )
-        return doc
+
+if __name__ == "__main__":
+
+    def main():
+        docs = data.pet.NewPetFormatImporter(
+            r"C:\Users\Neuberger\PycharmProjects\pet-data-augmentation\jsonl\all.new.jsonl"
+        ).do_import()
+        doc = docs.pop(0)
+        step = FillerWordAugmentation(docs)
+        augs = step.do_augment(doc, 10)
+        print(" ".join(t.text for t in doc.tokens))
+        print("-----------")
+        for a in augs:
+            print(" ".join(t.text for t in a.tokens))
+            print()
+
+    main()

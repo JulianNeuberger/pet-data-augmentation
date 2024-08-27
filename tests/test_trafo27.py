@@ -3,7 +3,7 @@ from data import model
 
 
 def test_load():
-    abbreviations = trafo27.Trafo27Step._load()
+    abbreviations = trafo27.ContractionsAndExpansionsPerturbation._load()
 
     assert len(abbreviations) > 0
 
@@ -16,7 +16,7 @@ def test_expansion():
         sentences=[model.Sentence(tokens)],
     )
 
-    trafo = trafo27.Trafo27Step([document])
+    trafo = trafo27.ContractionsAndExpansionsPerturbation([document])
     augmented = trafo.do_augment(document)
 
     assert len(augmented.tokens) == 2

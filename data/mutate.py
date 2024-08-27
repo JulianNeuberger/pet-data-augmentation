@@ -49,6 +49,98 @@ def insert_tokens_inplace(
         )
 
 
+def insert_texts_inplace(
+    document: PetDocument, texts: typing.List[str], index_in_document: int
+) -> None:
+    tokens = text_to_tokens(document, texts, index_in_document)
+    insert_tokens_inplace(document, tokens, index_in_document)
+
+
+def swap_sentences_inplace(
+    document: PetDocument, first_sentence_id: int, second_sentence_id: int
+) -> None:
+    assert first_sentence_id != second_sentence_id
+
+    if first_sentence_id > second_sentence_id:
+        second_sentence_id, first_sentence_id = first_sentence_id, second_sentence_id
+
+    first_sentence = document.sentences[first_sentence_id]
+    second_sentence = document.sentences[second_sentence_id]
+
+    sentence_id_map = {i: i for i in range(len(document.sentences))}
+    sentence_id_map[first_sentence_id] = second_sentence_id
+    sentence_id_map[second_sentence_id] = first_sentence_id
+
+    # how many tokens will we shift left / right when we swap sentences?
+    offset = len(first_sentence) - len(second_sentence)
+
+    # start unchanged
+    token_index_mapping = {
+        t.index_in_document: t.index_in_document for t in document.tokens
+    }
+
+    first_sentence_start = first_sentence[0].index_in_document
+    first_sentence_end = first_sentence[-1].index_in_document + 1
+    second_sentence_start = second_sentence[0].index_in_document
+
+    # move the indices of the first sentence
+    for i, token in enumerate(first_sentence):
+        token_index_mapping[token.index_in_document] = (
+            second_sentence_start + i - offset
+        )
+
+    # move the indices of the second sentence
+    for i, token in enumerate(second_sentence):
+        token_index_mapping[token.index_in_document] = first_sentence_start + i
+
+    # finally, correct all token indices between first and second sentence
+    for token in document.tokens[first_sentence_end:second_sentence_start]:
+        token_index_mapping[token.index_in_document] -= offset
+
+    # sanity checks
+    assert len(set(token_index_mapping.values())) == len(
+        document.tokens
+    ), f"Mapping has duplicates: {token_index_mapping}"
+    assert (
+        max(token_index_mapping.values()) == len(document.tokens) - 1
+    ), f"Mapping has an index out of range ({max(token_index_mapping.values())}): {token_index_mapping}"
+    assert (
+        min(token_index_mapping.values()) == 0
+    ), f"Mapping has an index out of range ({min(token_index_mapping.values())}): {token_index_mapping}"
+
+    # apply the swap now
+    tokens = list(document.tokens)
+    for i, token in enumerate(tokens):
+        document.tokens[token_index_mapping[i]] = PetToken(
+            text=token.text,
+            pos_tag=token.pos_tag,
+            sentence_index=sentence_id_map[token.sentence_index],
+            index_in_document=token_index_mapping[token.index_in_document],
+        )
+    for i, mention in enumerate(document.mentions):
+        document.mentions[i] = PetMention(
+            type=mention.type,
+            token_document_indices=tuple(
+                token_index_mapping[i] for i in mention.token_document_indices
+            ),
+        )
+
+
+def text_to_tokens(
+    document: PetDocument, texts: typing.List[str], index_in_document: int
+) -> typing.List[PetToken]:
+    text_pos = nltk.pos_tag(texts)
+    indices = range(index_in_document, index_in_document + len(texts))
+    sentence_id = 0
+    if index_in_document > 0:
+        sentence_id = document.tokens[index_in_document - 1].sentence_index
+    tokens = [
+        PetToken(text=t, pos_tag=p, index_in_document=i, sentence_index=sentence_id)
+        for t, p, i in zip(texts, text_pos, indices)
+    ]
+    return tokens
+
+
 def delete_token_inplace(doc: PetDocument, token_id: int) -> None:
     mention_to_remove = None
     for m_id, m in enumerate(doc.mentions):
@@ -119,29 +211,7 @@ def replace_sequence_inplace(
 ) -> None:
     old_sequence_length = sequence_end - sequence_start
     new_sequence_length = len(replacement)
-
-    replacement_pos = nltk.pos_tag(replacement)
-    replacement_indices = range(sequence_start, sequence_start + len(replacement))
-    replacement_sentence_ids = [
-        t.sentence_index for t in doc.tokens[sequence_start:sequence_end]
-    ]
-    # pad with last sentence index
-    replacement_sentence_ids += [replacement_sentence_ids[-1]] * (
-        new_sequence_length - old_sequence_length
-    )
-    replacement_tokens = [
-        PetToken(text=t, pos_tag=p, index_in_document=i, sentence_index=s)
-        for t, p, i, s in zip(
-            replacement, replacement_pos, replacement_indices, replacement_sentence_ids
-        )
-    ]
-
-    print(
-        f"mutating: replacing \"{' '.join(t.text for t in doc.tokens[sequence_start:sequence_end])}\" "
-        f"with \"{' '.join(t.text for t in replacement_tokens)}\""
-    )
-
-    print(f"diff: {old_sequence_length - new_sequence_length}")
+    replacement_tokens = text_to_tokens(doc, replacement, sequence_start)
 
     if old_sequence_length == new_sequence_length:
         for i, replacement_token in enumerate(replacement_tokens):

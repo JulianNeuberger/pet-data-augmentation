@@ -1,9 +1,22 @@
-from augment.antonyms import AntonymInversionStep
-from augment.antonyms import EvenAntonymsSubstitute
 from augment.augmenter import Augmenter, run_augmentation
+
 from augment.base import AugmentationStep
+
+from augment.sampling import TagSubsequenceSubstition, EntityMentionReplacement
+from augment.antonyms import EvenAntonymsSubstitute, AntonymInversionStep
 from augment.merge import MergeDocumentsStep
 from augment.negation import AuxiliaryNegationRemoval
+from augment.abbreviate import (
+    ContractionsAndExpansionsPerturbation,
+    EnglishAndFrenchAbbreviations,
+    ReplaceAbbreviationsAndAcronyms,
+)
+from augment.masking import (
+    ContextualMeaningPerturbation,
+    HyponymReplacement,
+    HypernymReplacement,
+    TransformerFill,
+)
 
 # from augment.trafo100 import Trafo100Step
 # from augment.trafo101 import Trafo101Step

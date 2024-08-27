@@ -1,4 +1,4 @@
-from augment.trafo62 import Trafo62Step
+from augment.trafo62 import MultiLingualBackTranslation
 from data import model
 
 
@@ -54,7 +54,7 @@ def test_do_augment():
         relations=[],
     )
 
-    trafo = Trafo62Step([doc])
+    trafo = MultiLingualBackTranslation([doc])
     augmented = trafo.do_augment(doc)
 
     print()

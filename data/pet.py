@@ -26,6 +26,21 @@ class PetDocument(
     def token_index_in_sentence(self, token: "PetToken") -> int:
         return self.sentences[token.sentence_index].index(token)
 
+    def tokens_for_character_indices(
+        self, start: int, stop: int
+    ) -> typing.List["PetToken"]:
+        cur_start = 0
+        tokens = []
+        for t in self.tokens:
+            cur_stop = cur_start + len(t.text)
+            if cur_start >= start and cur_stop <= stop:
+                tokens.append(t)
+            # +1 to account for white space
+            cur_start = cur_stop + 1
+            if cur_start > stop:
+                break
+        return tokens
+
     @property
     def sentences(self) -> typing.List[typing.List["PetToken"]]:
         ret = []
