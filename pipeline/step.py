@@ -110,6 +110,7 @@ class CatBoostRelationExtractionStep(PipelineStep):
         return metrics.relation_f1_stats(
             predicted_documents=predictions,
             ground_truth_documents=ground_truth,
+            print_only_tags=None,
             verbose=self._verbose,
         )
 
@@ -198,6 +199,7 @@ class NeuralRelationExtraction(PipelineStep):
         return metrics.relation_f1_stats(
             predicted_documents=predictions,
             ground_truth_documents=ground_truth,
+            print_only_tags=None,
             verbose=self._verbose,
         )
 
@@ -242,7 +244,9 @@ class RuleBasedRelationExtraction(PipelineStep):
         ground_truth: typing.List[PetDocument],
     ) -> typing.Dict[str, metrics.Stats]:
         return metrics.relation_f1_stats(
-            predicted_documents=predictions, ground_truth_documents=ground_truth
+            predicted_documents=predictions,
+            ground_truth_documents=ground_truth,
+            print_only_tags=None,
         )
 
     def _run(
@@ -312,7 +316,9 @@ class CrfMentionEstimatorStep(PipelineStep):
         ground_truth: typing.List[PetDocument],
     ) -> typing.Dict[str, metrics.Stats]:
         return metrics.mentions_f1_stats(
-            predicted_documents=predictions, ground_truth_documents=ground_truth
+            predicted_documents=predictions,
+            ground_truth_documents=ground_truth,
+            print_only_tags=None,
         )
 
     def _run(
@@ -352,7 +358,8 @@ class NeuralCoReferenceResolutionStep(PipelineStep):
     ) -> typing.Dict[str, metrics.Stats]:
         return metrics.entity_f1_stats(
             predicted_documents=predictions,
-            only_tags=self._resolved_tags,
+            print_only_tags=None,
+            calculate_only_tags=self._resolved_tags,
             min_num_mentions=2,
             ground_truth_documents=ground_truth,
         )
@@ -389,7 +396,8 @@ class NaiveCoReferenceResolutionStep(PipelineStep):
     ) -> typing.Dict[str, metrics.Stats]:
         return metrics.entity_f1_stats(
             predicted_documents=predictions,
-            only_tags=self._resolved_tags,
+            calculate_only_tags=self._resolved_tags,
+            print_only_tags=None,
             min_num_mentions=2,
             ground_truth_documents=ground_truth,
         )

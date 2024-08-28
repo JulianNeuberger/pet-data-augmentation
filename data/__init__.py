@@ -6,3 +6,12 @@ from data.pet import (
     PetMention,
     NewPetFormatImporter,
 )
+
+from data.base import (
+    HasType,
+    HasMentions,
+    HasRelations,
+    HasCustomMatch,
+    DocumentBase,
+    SupportsPrettyDump,
+)

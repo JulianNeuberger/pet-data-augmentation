@@ -1,7 +1,7 @@
 import dataclasses
 import typing
 
-from data import PetDocument
+import data
 
 
 @dataclasses.dataclass
@@ -67,60 +67,68 @@ class Stats:
 
 def relation_f1_stats(
     *,
-    predicted_documents: typing.List[PetDocument],
-    ground_truth_documents: typing.List[PetDocument],
+    predicted_documents: typing.List[data.PetDocument],
+    ground_truth_documents: typing.List[data.PetDocument],
+    print_only_tags: typing.Optional[typing.List[str]],
     verbose: bool = False,
 ) -> typing.Dict[str, Stats]:
     return _f1_stats(
         predicted_documents=predicted_documents,
         ground_truth_documents=ground_truth_documents,
         attribute="relations",
+        print_only_tags=print_only_tags,
         verbose=verbose,
     )
 
 
 def mentions_f1_stats(
     *,
-    predicted_documents: typing.List[PetDocument],
-    ground_truth_documents: typing.List[PetDocument],
+    predicted_documents: typing.List[data.PetDocument],
+    ground_truth_documents: typing.List[data.PetDocument],
+    print_only_tags: typing.Optional[typing.List[str]],
     verbose: bool = False,
 ) -> typing.Dict[str, Stats]:
     return _f1_stats(
         predicted_documents=predicted_documents,
         ground_truth_documents=ground_truth_documents,
         attribute="mentions",
+        print_only_tags=print_only_tags,
         verbose=verbose,
     )
 
 
 def entity_f1_stats(
     *,
-    predicted_documents: typing.List[PetDocument],
-    ground_truth_documents: typing.List[PetDocument],
-    only_tags: typing.List[str],
+    predicted_documents: typing.List[data.PetDocument],
+    ground_truth_documents: typing.List[data.PetDocument],
+    calculate_only_tags: typing.List[str],
     min_num_mentions: int = 1,
+    print_only_tags: typing.Optional[typing.List[str]],
     verbose: bool = False,
 ) -> typing.Dict[str, Stats]:
-    predicted_documents = [d.copy(clear=[]) for d in predicted_documents]
+    calculate_only_tags = [t.lower() for t in calculate_only_tags]
     for d in predicted_documents:
         d.entities = [
             e
             for e in d.entities
-            if len(e.mention_indices) >= min_num_mentions and e.get_tag(d) in only_tags
+            if len(e.mention_indices) >= min_num_mentions
+            and e.get_tag(d).lower() in calculate_only_tags
         ]
 
-    ground_truth_documents = [d.copy(clear=[]) for d in ground_truth_documents]
+    ground_truth_documents = [d.copy([]) for d in ground_truth_documents]
     for d in ground_truth_documents:
         d.entities = [
             e
             for e in d.entities
-            if len(e.mention_indices) >= min_num_mentions and e.get_tag(d) in only_tags
+            if len(e.mention_indices) >= min_num_mentions
+            and e.get_tag(d) in calculate_only_tags
         ]
 
     return _f1_stats(
         predicted_documents=predicted_documents,
         ground_truth_documents=ground_truth_documents,
         attribute="entities",
+        print_only_tags=print_only_tags,
         verbose=verbose,
     )
 
@@ -146,24 +154,31 @@ def _add_to_stats_by_tag(
     return stats_by_tag
 
 
-def _get_ner_tag_for_tuple(
-    element_type: str, element: typing.Tuple, document: PetDocument
+def _tag(
+    document: data.PetDocument,
+    e: typing.Union[
+        data.PetMention,
+        data.PetEntity,
+        data.PetRelation,
+    ],
 ) -> str:
-    assert element_type in ["mentions", "relations", "entities"]
-    assert type(element) == tuple
-    if element_type == "entities":
-        return list(element[0])[0][0]
-    return element[0]
+    if isinstance(e, data.HasType):
+        return e.type
+    if type(e) == data.PetEntity:
+        assert type(document) == data.PetDocument
+        return e.get_tag(document)
+    raise AssertionError(f"Unknown type {type(e)}")
 
 
 def _f1_stats(
     *,
-    predicted_documents: typing.List[PetDocument],
-    ground_truth_documents: typing.List[PetDocument],
+    predicted_documents: typing.List[data.DocumentBase],
+    ground_truth_documents: typing.List[data.DocumentBase],
     attribute: str,
+    print_only_tags: typing.Optional[typing.List[str]],
     verbose: bool = False,
 ) -> typing.Dict[str, Stats]:
-    assert attribute in ["mentions", "relations", "entities"]
+    assert attribute in ["mentions", "relations", "entities", "constraints"]
     assert len(predicted_documents) == len(ground_truth_documents)
 
     stats_by_tag: typing.Dict[str, typing.Tuple[float, float, float]] = {}
@@ -172,57 +187,92 @@ def _f1_stats(
         true_attribute = getattr(t, attribute)
         pred_attribute = getattr(p, attribute)
 
-        true_as_set = set([e.to_tuple(t) for e in true_attribute])
-        assert len(true_as_set) == len(
-            true_attribute
-        ), f"{len(true_as_set)}, {len(true_attribute)}, {true_as_set}, {true_attribute}"
+        true = list(true_attribute)
+        pred = list(pred_attribute)
+        true_candidates = list(true_attribute)
+        ok = []
+        non_ok = []
+        for cur in pred:
+            match: typing.Optional[data.DocumentBase] = None
+            if isinstance(cur, data.HasCustomMatch):
+                for candidate in true_candidates:
+                    if cur.match(candidate):
+                        match = candidate
+                        break
+            else:
+                try:
+                    match_index = true_candidates.index(cur)
+                    match = true_candidates[match_index]
+                except ValueError:
+                    pass
 
-        pred_as_set = set([e.to_tuple(p) for e in pred_attribute])
+            if match is not None:
+                true_candidates.remove(match)
+                ok.append(cur)
+                continue
+            non_ok.append(cur)
+        missing = true_candidates
 
         _add_to_stats_by_tag(
             stats_by_tag,
-            lambda e: _get_ner_tag_for_tuple(attribute, e, t),
-            true_as_set,
+            lambda e: _tag(t, e),
+            true,
             "gold",
         )
         _add_to_stats_by_tag(
             stats_by_tag,
-            lambda e: _get_ner_tag_for_tuple(attribute, e, p),
-            pred_as_set,
+            lambda e: _tag(t, e),
+            pred,
             "pred",
         )
 
-        ok_preds = true_as_set.intersection(pred_as_set)
-        non_ok = [
-            e.pretty_print(p)
-            for e in pred_attribute
-            if e.to_tuple(p) not in true_as_set
-            # if _get_ner_tag_for_tuple(attribute, e.to_tuple(p), p).lower() == 'actor'
-        ]
-        if verbose and len(non_ok) > 0:
-            print("=" * 150)
-            print(p.text)
-            print("pred")
-            print(", ".join([a.pretty_print(p) for a in pred_attribute]))
-            print([e for e in pred_as_set])
-            print("-" * 100)
-            print("true")
-            print(", ".join([a.pretty_print(t) for a in true_attribute]))
-            print([e for e in true_as_set])
-            print("-" * 100)
-            print("ok")
-            print(ok_preds)
-            print("non ok")
-            print(non_ok)
-
         _add_to_stats_by_tag(
             stats_by_tag,
-            lambda e: _get_ner_tag_for_tuple(attribute, e, p),
-            ok_preds,
+            lambda e: _tag(t, e),
+            ok,
             "ok",
         )
+
+        if verbose and (len(non_ok) > 0 or len(missing) > 0):
+            print_sets(
+                t,
+                {
+                    "true": true,
+                    "pred": pred,
+                    # "ok": ok,
+                    "non-ok": non_ok,
+                    "missing": missing,
+                },
+                lambda e: _tag(t, e),
+                print_only_tags,
+            )
 
     return {
         tag: Stats(num_pred=p, num_gold=g, num_ok=o)
         for tag, (g, p, o) in stats_by_tag.items()
     }
+
+
+def print_sets(
+    document: data.DocumentBase,
+    sets: typing.Dict[str, typing.List[data.SupportsPrettyDump]],
+    get_tag: typing.Callable[[typing.Any], str],
+    print_only_tags: typing.Optional[typing.List[str]],
+):
+    print(f"=== {document.id} " + "=" * 150)
+    print(document.text)
+    print("-" * 100)
+
+    for set_name, values in sets.items():
+        values = [
+            e
+            for e in values
+            if print_only_tags is None or get_tag(e) in print_only_tags
+        ]
+        print(f"{len(values)} x {set_name}")
+        print("\n".join([e.pretty_dump(document) for e in values]))
+        print("-" * 100)
+        print()
+
+    print("=" * 150)
+    print()

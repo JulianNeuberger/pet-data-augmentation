@@ -47,7 +47,7 @@ class Pipeline:
                 ground_truth_documents=ground_truth_documents,
             )
             pipeline_result.step_results[s] = result
-            test_documents = [d.copy() for d in result.predictions]
+            test_documents = [d.copy(clear=[]) for d in result.predictions]
 
         return pipeline_result
 
