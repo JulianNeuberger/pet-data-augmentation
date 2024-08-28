@@ -10,11 +10,11 @@ import augment
 import data
 import pipeline
 from augment import params
-from data import loader, model
+from data import PetDocument
 
 strategies: typing.List[typing.Type[augment.AugmentationStep]] = [
     # augment.Trafo3Step,
-    augment.EvenAntonymsSubstitute,
+    augment.TransformerFill,
     # augment.Trafo6Step,
     # augment.Trafo8Step,  # long runtime
     # augment.Trafo24Step,
@@ -73,7 +73,7 @@ def suggest_param(param: params.Param, trial: optuna.Trial) -> typing.Any:
 def instantiate_step(
     step_class: typing.Type[augment.AugmentationStep],
     trial: optuna.Trial,
-    dataset: typing.List[model.Document],
+    dataset: typing.List[PetDocument],
 ) -> augment.AugmentationStep:
     suggested_params = {
         p.name: suggest_param(p, trial) for p in step_class.get_params()
@@ -84,7 +84,7 @@ def instantiate_step(
 def objective_factory(
     augmenter_class: typing.Type[augment.AugmentationStep],
     pipeline_step_class: typing.Type[pipeline.PipelineStep],
-    documents: typing.List[data.Document],
+    documents: typing.List[PetDocument],
     fold_indices: typing.List[typing.Tuple[typing.Iterable[int], typing.Iterable[int]]],
     un_augmented_f1: float,
     **kwargs,
@@ -93,7 +93,7 @@ def objective_factory(
 
         augmentation_rate = trial.suggest_float("augmentation_rate", low=0.0, high=10.0)
         un_augmented_train_folds = []
-        augmented_train_folds: typing.List[typing.List[data.Document]] = []
+        augmented_train_folds: typing.List[typing.List[PetDocument]] = []
         test_folds = []
         for train_indices, test_indices in fold_indices:
             test_documents = [documents[i] for i in test_indices]
@@ -159,7 +159,8 @@ def main():
         if len(errors) > 0:
             raise AssertionError("\n".join([str(e) for e in errors]))
 
-    all_documents = loader.read_documents_from_json("./jsonl/all.jsonl")
+    # all_documents = loader.read_documents_from_json("./jsonl/all.jsonl")
+    all_documents = data.pet.NewPetFormatImporter(r"jsonl\all.new.jsonl").do_import()
     kf = sklearn.model_selection.KFold(
         n_splits=5, random_state=random_state, shuffle=True
     )
@@ -174,8 +175,8 @@ def main():
         "device_ids": device_ids,
     }
 
-    train_folds: typing.List[typing.List[data.Document]] = []
-    test_folds: typing.List[typing.List[data.Document]] = []
+    train_folds: typing.List[typing.List[PetDocument]] = []
+    test_folds: typing.List[typing.List[PetDocument]] = []
     for train_indices, test_indices in fold_indices:
         test_documents = [all_documents[i] for i in test_indices]
         train_documents = [all_documents[i] for i in train_indices]
