@@ -1,7 +1,7 @@
 import dataclasses
 import typing
 
-import data
+from data import PetDocument
 from pipeline import step
 
 
@@ -27,20 +27,25 @@ class Pipeline:
     def steps(self):
         return [s for s in self._steps]
 
-    def run(self, *,
-            train_documents: typing.List[data.Document],
-            test_documents: typing.List[data.Document],
-            ground_truth_documents: typing.List[data.Document]) -> PipelineResult:
-        print(f'Running {self.description()}')
+    def run(
+        self,
+        *,
+        train_documents: typing.List[PetDocument],
+        test_documents: typing.List[PetDocument],
+        ground_truth_documents: typing.List[PetDocument],
+    ) -> PipelineResult:
+        print(f"Running {self.description()}")
         pipeline_result = PipelineResult({})
 
-        train_documents = [d.copy() for d in train_documents]
-        test_documents = [d.copy() for d in test_documents]
+        train_documents = [d.copy(clear=[]) for d in train_documents]
+        test_documents = [d.copy(clear=[]) for d in test_documents]
 
         for s in self._steps:
-            result = s.run(train_documents=train_documents,
-                           test_documents=test_documents,
-                           ground_truth_documents=ground_truth_documents)
+            result = s.run(
+                train_documents=train_documents,
+                test_documents=test_documents,
+                ground_truth_documents=ground_truth_documents,
+            )
             pipeline_result.step_results[s] = result
             test_documents = [d.copy() for d in result.predictions]
 

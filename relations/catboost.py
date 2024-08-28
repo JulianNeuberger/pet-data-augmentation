@@ -11,7 +11,7 @@ import spacy
 from gensim import downloader
 from spacy import tokens
 
-import data
+from data import PetMention, PetDocument, PetRelation, PetToken
 from relations import sampler
 
 try:
@@ -71,9 +71,20 @@ class CatBoostRelationEstimator:
         self._device = device
         self._device_ids = device_ids
 
-    def train(
-        self, documents: typing.List[data.Document]
-    ) -> "CatBoostRelationEstimator":
+    @staticmethod
+    def load_model(config: dict):
+        estimator = CatBoostRelationEstimator(**config)
+
+        num_passes = config["num_passes"]
+        name = config["name"]
+        print(name)
+        for pass_id in range(num_passes):
+            model_path_str = f"api/models/catboost/{name}.cbm"
+            estimator._model[pass_id] = catboost.CatBoostClassifier()
+            estimator._model[pass_id].load_model(model_path_str)
+        return estimator
+
+    def train(self, documents: typing.List[PetDocument]) -> "CatBoostRelationEstimator":
         random.seed(self._seed)
         for pass_id in range(self._num_passes):
             print(f"Training pass #{pass_id + 1}/{self._num_passes}")
@@ -107,25 +118,23 @@ class CatBoostRelationEstimator:
 
         return self
 
-    def predict(
-        self, documents: typing.List[data.Document]
-    ) -> typing.List[data.Document]:
+    def predict(self, documents: typing.List[PetDocument]) -> typing.List[PetDocument]:
         assert all([len(d.entities) > 0 for d in documents])
         assert all([len(d.relations) == 0 for d in documents])
 
-        last_pass = [d.copy(clear_relations=True) for d in documents]
+        last_pass = [d.copy(clear=["relations"]) for d in documents]
         for pass_id in range(self._num_passes):
             print(f"Prediction pass #{pass_id + 1}/{self._num_passes}")
-            predict_on_documents = [d.copy(clear_relations=True) for d in documents]
+            predict_on_documents = [d.copy(clear=["relations"]) for d in documents]
             last_pass = self._predict(pass_id, predict_on_documents, last_pass)
         return last_pass
 
     def _predict(
         self,
         pass_id: int,
-        documents: typing.List[data.Document],
-        last_passes: typing.List[data.Document],
-    ) -> typing.List[data.Document]:
+        documents: typing.List[PetDocument],
+        last_passes: typing.List[PetDocument],
+    ) -> typing.List[PetDocument]:
         for document, last_pass in zip(documents, last_passes):
             spacy_sentences = self._get_spacy_sentences(document)
             feature_builder = functools.partial(
@@ -151,21 +160,27 @@ class CatBoostRelationEstimator:
 
     @staticmethod
     def _sub_sample_document_relations(
-        document: data.Document, rate: float
-    ) -> data.Document:
+        document: PetDocument, rate: float
+    ) -> PetDocument:
         assert 0.0 <= rate <= 1.0
-        ret = document.copy(clear_relations=True)
+        ret = document.copy(clear=["relations"])
         for r in document.relations:
             if random.random() <= rate:
                 ret.relations.append(r.copy())
         return ret
 
     def _get_samples(
-        self, documents: typing.List[data.Document], pass_id: int
+        self, documents: typing.List[PetDocument], pass_id: int
     ) -> typing.List[typing.Tuple[typing.List, str]]:
         samples = []
-        document: data.Document
+        document: PetDocument
         for document in documents:
+            if len(document.mentions) == 0:
+                continue
+            if len(document.entities) == 0:
+                continue
+            if len(document.relations) == 0:
+                continue
             spacy_sentences = self._get_spacy_sentences(document)
 
             if self._num_passes > 1:
@@ -184,29 +199,15 @@ class CatBoostRelationEstimator:
 
             samples_in_document = 0
             for relation in document.relations:
-                head_entity = document.entities[relation.head_entity_index]
-                tail_entity = document.entities[relation.tail_entity_index]
+                head_mention_index = relation.head_mention_index
+                tail_mention_index = relation.tail_mention_index
 
-                assert len(head_entity.mention_indices) != 0
-                assert len(tail_entity.mention_indices) != 0
+                x = feature_builder((head_mention_index, tail_mention_index))
+                y = relation.type
 
-                mention_index_pairs = itertools.product(
-                    head_entity.mention_indices, tail_entity.mention_indices
-                )
+                samples.append((x, y))
 
-                mention_index_pairs = [
-                    (h, t)
-                    for h, t in mention_index_pairs
-                    if document.mentions[h].sentence_index in relation.evidence
-                    and document.mentions[t].sentence_index in relation.evidence
-                ]
-
-                xs = list(map(feature_builder, mention_index_pairs))
-                ys = [relation.tag] * len(xs)
-
-                samples.extend(zip(xs, ys))
-
-                samples_in_document += len(ys)
+                samples_in_document += 1
 
             assert len(document.relations) <= samples_in_document
 
@@ -228,8 +229,8 @@ class CatBoostRelationEstimator:
         self,
         indices: typing.List[typing.Tuple[int, int]],
         ys: np.ndarray,
-        document: data.Document,
-    ) -> typing.List[data.Relation]:
+        document: PetDocument,
+    ) -> typing.List[PetRelation]:
         assert len(indices) == len(ys)
 
         relations = []
@@ -245,33 +246,20 @@ class CatBoostRelationEstimator:
 
             assert tag in self._target_tags
 
-            head_mention = document.mentions[head_mention_index]
-            tail_mention = document.mentions[tail_mention_index]
-
-            head_index = document.entity_index_for_mention(
-                document.mentions[head_mention_index]
-            )
-            tail_index = document.entity_index_for_mention(
-                document.mentions[tail_mention_index]
-            )
-
             relations.append(
-                data.Relation(
-                    head_entity_index=head_index,
-                    tail_entity_index=tail_index,
-                    tag=tag,
-                    evidence=list(
-                        {head_mention.sentence_index, tail_mention.sentence_index}
-                    ),
+                PetRelation(
+                    head_mention_index=head_mention_index,
+                    tail_mention_index=tail_mention_index,
+                    type=tag,
                 )
             )
 
         return relations
 
-    def _get_spacy_sentences(self, document: data.Document) -> typing.List[tokens.Doc]:
+    def _get_spacy_sentences(self, document: PetDocument) -> typing.List[tokens.Doc]:
         spacy_sentences: typing.List[tokens.Doc] = []
         batch = [
-            tokens.Doc(self._nlp.vocab, [t.text for t in sentence.tokens])
+            tokens.Doc(self._nlp.vocab, [t.text for t in sentence])
             for sentence in document.sentences
         ]
         doc: tokens.Doc
@@ -282,8 +270,8 @@ class CatBoostRelationEstimator:
     def _build_features(
         self,
         mention_index_pair: typing.Tuple[int, int],
-        document: data.Document,
-        last_pass: data.Document,
+        document: PetDocument,
+        last_pass: PetDocument,
         spacy_sentences: typing.List[tokens.Doc],
     ) -> typing.List:
         assert document.name == last_pass.name
@@ -313,20 +301,26 @@ class CatBoostRelationEstimator:
             else:
                 context.append(document.mentions[mention_index])
 
+        head_sentence_index = document.tokens[
+            head.token_document_indices[0]
+        ].sentence_index
         _, head_spacy = self.root_token_for_mention(
-            head, document, spacy_sentences[head.sentence_index]
+            head, document, spacy_sentences[head_sentence_index]
         )
+        tail_sentence_index = document.tokens[
+            tail.token_document_indices[0]
+        ].sentence_index
         _, tail_spacy = self.root_token_for_mention(
-            tail, document, spacy_sentences[tail.sentence_index]
+            tail, document, spacy_sentences[tail_sentence_index]
         )
 
         features = [
             tail_mention_index - head_mention_index,
-            tail.sentence_index - head.sentence_index,
-            len(head.token_indices),
-            len(tail.token_indices),
-            head.ner_tag,
-            tail.ner_tag,
+            tail_sentence_index - head_sentence_index,
+            len(head.token_document_indices),
+            len(tail.token_document_indices),
+            head.type,
+            tail.type,
             head_spacy.dep_,
             tail_spacy.dep_,
         ]
@@ -337,7 +331,7 @@ class CatBoostRelationEstimator:
                 tail_spacy.pos_,
             ]
 
-        features += [m.ner_tag if m is not None else "" for m in context]
+        features += [m.type if m is not None else "" for m in context]
 
         # mentions_between = [
         #     document.mentions[i]
@@ -360,7 +354,7 @@ class CatBoostRelationEstimator:
                 head_mention_index, only_head=True
             )
             head_incoming_relations = collections.Counter(
-                [r.tag for r in head_relations]
+                [r.type for r in head_relations]
             )
             # if len(head_relations) > 0:
             #     print(head_relations)
@@ -369,7 +363,7 @@ class CatBoostRelationEstimator:
                 tail_mention_index, only_tail=True
             )
             tail_incoming_relations = collections.Counter(
-                [r.tag for r in tail_relations]
+                [r.type for r in tail_relations]
             )
             # if len(tail_relations) > 0:
             #     print(tail_relations)
@@ -391,25 +385,32 @@ class CatBoostRelationEstimator:
         return features
 
     def root_token_for_mention(
-        self, mention: data.Mention, document: data.Document, spacy_tokens: tokens.Doc
-    ) -> typing.Tuple[data.Token, tokens.Token]:
-        sentence = document.sentences[mention.sentence_index]
+        self, mention: PetMention, document: PetDocument, spacy_tokens: tokens.Doc
+    ) -> typing.Tuple[PetToken, tokens.Token]:
+        sentence = document.sentences[mention.get_sentence_index(document)]
         spacy_token: tokens.Token
 
-        assert len(mention.token_indices) > 0
-        assert len(spacy_tokens) > max(
-            mention.token_indices
-        ), f"Mention refers to tokens {mention.token_indices}, " \
-           f"but there are only {len(spacy_tokens)} tokens " \
-           f"in sentence {spacy_tokens.text}, with original " \
-           f"tokens {[t.text for t in sentence.tokens]}"
+        token_sentence_indices = [
+            document.token_index_in_sentence(t) for t in mention.get_tokens(document)
+        ]
+
+        assert len(token_sentence_indices) > 0
+        if len(spacy_tokens) <= max(token_sentence_indices):
+            print("spacy: ", [t.text for t in spacy_tokens])
+            print("org:   ", [t.text for t in sentence])
+        assert len(spacy_tokens) > max(token_sentence_indices), (
+            f'Mention "{mention.text(document)}" refers to tokens {token_sentence_indices}, '
+            f"but there are only {len(spacy_tokens)} tokens "
+            f"in sentence {spacy_tokens.text}, with original "
+            f"tokens {[t.text for t in sentence]}"
+        )
 
         mention_token_depths = {
             mention_token_index: self._get_token_depth(
                 spacy_tokens[token_index_in_sentence]
             )
             for mention_token_index, token_index_in_sentence in enumerate(
-                mention.token_indices
+                token_sentence_indices
             )
         }
 
@@ -417,8 +418,8 @@ class CatBoostRelationEstimator:
             mention_token_depths, key=mention_token_depths.get
         )[0]
 
-        token = sentence.tokens[mention.token_indices[top_level_token_index]]
-        spacy_token = spacy_tokens[mention.token_indices[top_level_token_index]]
+        token = sentence[token_sentence_indices[top_level_token_index]]
+        spacy_token = spacy_tokens[token_sentence_indices[top_level_token_index]]
 
         return token, spacy_token
 
@@ -430,7 +431,7 @@ class CatBoostRelationEstimator:
             spacy_token = spacy_token.head
         return depth
 
-    def embed_tokens(self, tokens: typing.List[data.Token]):
+    def embed_tokens(self, tokens: typing.List[PetToken]):
         words = [t.text for t in tokens]
         seq = np.array([self._embedder[w] for w in words if w in self._embedder])
         if seq.shape[0] == 0:

@@ -41,6 +41,26 @@ class PetDocument(
                 break
         return tokens
 
+    def get_relations_by_mention(
+        self, mention_index: int, only_head: bool = False, only_tail: bool = False
+    ) -> typing.List["PetRelation"]:
+        ret = []
+        for r in self.relations:
+            if r.head_mention_index == mention_index and not only_tail:
+                ret.append(r)
+            elif r.tail_mention_index == mention_index and not only_head:
+                ret.append(r)
+        return ret
+
+    def relation_exists(self, head_index: int, tail_index: int) -> bool:
+        for r in self.relations:
+            if (
+                r.head_mention_index == head_index
+                and r.tail_mention_index == tail_index
+            ):
+                return True
+        return False
+
     @property
     def sentences(self) -> typing.List[typing.List["PetToken"]]:
         ret = []
@@ -53,6 +73,7 @@ class PetDocument(
         return ret
 
     def copy(self, clear: typing.List[str]) -> "PetDocument":
+        assert all(c in ["relations", "mentions", "entities"] for c in clear)
         return PetDocument(
             name=self.name,
             text=self.text,
@@ -146,6 +167,12 @@ class PetMention(base.HasType, base.SupportsPrettyDump[PetDocument]):
 
     def pretty_dump(self, document: "PetDocument") -> str:
         return f"{self.type}, '{self.text(document)}', {self.token_document_indices}"
+
+    def get_tokens(self, doc: "PetDocument") -> typing.List["PetToken"]:
+        return [doc.tokens[i] for i in self.token_document_indices]
+
+    def get_sentence_index(self, doc: "PetDocument") -> int:
+        return doc.tokens[self.token_document_indices[0]].sentence_index
 
     def __eq__(self, o: object) -> bool:
         if not isinstance(o, PetMention):

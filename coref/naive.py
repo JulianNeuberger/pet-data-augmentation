@@ -1,31 +1,37 @@
 import typing
 
-import data
+from data import PetMention, PetDocument, PetEntity
 from coref import util
 
 
 class NaiveCoRefSolver:
-    def __init__(self, resolved_tags: typing.List[str], min_mention_overlap: float = .33):
+    def __init__(
+        self, resolved_tags: typing.List[str], min_mention_overlap: float = 0.33
+    ):
         self._tags = resolved_tags
         self._mention_overlap_threshold = min_mention_overlap
 
-    def resolve_co_references(self, documents: typing.List[data.Document]) -> typing.List[data.Document]:
+    def resolve_co_references(
+        self, documents: typing.List[PetDocument]
+    ) -> typing.List[PetDocument]:
         assert all([len(d.entities) == 0 for d in documents])
 
         for document in documents:
             all_matches: typing.Dict[int, typing.Dict[int, float]] = {}
             for mention_index, mention in enumerate(document.mentions):
-                if mention.ner_tag not in self._tags:
+                if mention.type not in self._tags:
                     continue
                 all_matches[mention_index] = self._match_mention(mention, document)
 
             # resolve mentions starting with best matches
             # noinspection PyTypeChecker
-            all_match_items: typing.List[typing.Tuple[int, typing.Dict[int, float]]] = list(all_matches.items())
+            all_match_items: typing.List[typing.Tuple[int, typing.Dict[int, float]]] = (
+                list(all_matches.items())
+            )
             all_match_items = [i for i in all_match_items if len(i[1].values()) > 0]
             all_match_items.sort(key=lambda item: max(item[1].values()), reverse=True)
 
-            entities: typing.Dict[int, data.Entity] = {}
+            entities: typing.Dict[int, PetEntity] = {}
 
             for mention_index, matches in all_match_items:
                 top_match_index = max(matches, key=lambda k: matches[k])
@@ -39,8 +45,11 @@ class NaiveCoRefSolver:
                     continue
 
                 if top_match_index not in entities:
-                    entities[top_match_index] = data.Entity([top_match_index])
-                entities[top_match_index].mention_indices.append(mention_index)
+                    entities[top_match_index] = PetEntity((top_match_index,))
+                top_match_entity = entities[top_match_index]
+                entities[top_match_index] = PetEntity(
+                    (mention_index,) + top_match_entity.mention_indices
+                )
                 entities[mention_index] = entities[top_match_index]
 
             document.entities.extend(entities.values())
@@ -49,18 +58,22 @@ class NaiveCoRefSolver:
         return documents
 
     @staticmethod
-    def _match_mention(mention: data.Mention, document: data.Document) -> typing.Dict[int, float]:
+    def _match_mention(
+        mention: PetMention, document: PetDocument
+    ) -> typing.Dict[int, float]:
         matches: typing.Dict[int, float] = {}
         for other_index, other in enumerate(document.mentions):
             if other == mention:
                 continue
 
-            if other.ner_tag != mention.ner_tag:
+            if other.type != mention.type:
                 continue
 
             mention_token_texts = NaiveCoRefSolver._text_from_mention(mention, document)
             other_token_texts = NaiveCoRefSolver._text_from_mention(other, document)
-            overlap_text = NaiveCoRefSolver._longest_overlap_of_lists(mention_token_texts, other_token_texts)
+            overlap_text = NaiveCoRefSolver._longest_overlap_of_lists(
+                mention_token_texts, other_token_texts
+            )
 
             left_overlap = len(overlap_text) / len(mention_token_texts)
             right_overlap = len(overlap_text) / len(other_token_texts)
@@ -70,7 +83,9 @@ class NaiveCoRefSolver:
         return matches
 
     @staticmethod
-    def _text_from_mention(mention: data.Mention, document: data.Document) -> typing.List[str]:
+    def _text_from_mention(
+        mention: PetMention, document: PetDocument
+    ) -> typing.List[str]:
         return [t.text for t in mention.get_tokens(document)]
 
     @staticmethod
