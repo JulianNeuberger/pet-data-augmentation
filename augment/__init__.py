@@ -18,6 +18,8 @@ from augment.masking import (
     TransformerFill,
 )
 
+from augment.synonyms import SynonymInsertion, SynonymSubstitution
+
 # from augment.trafo100 import Trafo100Step
 # from augment.trafo101 import Trafo101Step
 # from augment.trafo103 import Trafo103Step

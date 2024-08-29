@@ -35,7 +35,7 @@ transformation_classes: typing.List[typing.Type[augment.AugmentationStep]] = [
     augment.Trafo88Step,
     augment.Trafo90Step,
     augment.Trafo100Step,
-    augment.Trafo101Step,
+    augment.SynonymSubstitution,
     augment.Trafo103Step,
     augment.Trafo106Step,
     augment.TrafoInsertStep,

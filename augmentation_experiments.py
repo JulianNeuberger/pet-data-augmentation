@@ -1,3 +1,6 @@
+import json
+import os
+import pathlib
 import random
 import sys
 import traceback
@@ -13,33 +16,7 @@ from augment import params
 from data import PetDocument
 
 strategies: typing.List[typing.Type[augment.AugmentationStep]] = [
-    # augment.Trafo3Step,
-    augment.TransformerFill,
-    # augment.Trafo6Step,
-    # augment.Trafo8Step,  # long runtime
-    # augment.Trafo24Step,
-    # augment.Trafo26Step,
-    # augment.Trafo27Step,
-    # augment.Trafo39Step,
-    # augment.Trafo40Step,
-    # augment.Trafo52Step,
-    # augment.Trafo58Step,  # runs too long?
-    # augment.Trafo62Step,  # runs too long
-    # augment.Trafo79Step,
-    # augment.Trafo82Step,
-    # augment.Trafo86HyponymReplacement,
-    # augment.Trafo86HypernymReplacement,
-    # augment.Trafo88Step,
-    # augment.Trafo90Step,
-    # augment.Trafo100Step,
-    # augment.Trafo101Step,
-    # augment.Trafo103Step,
-    # augment.Trafo106Step,
-    # augment.Trafo110Step,
-    # augment.TrafoNullStep,
-    # augment.TrafoInsertStep,
-    # augment.TrafoRandomSwapStep,
-    # augment.CheatingTransformationStep,
+    augment.SynonymSubstitution
 ]
 
 max_runs_per_step = 25
@@ -186,16 +163,41 @@ def main():
     unaugmented_pipeline_step = pipeline_step_class(
         name="crf mention extraction", **kwargs
     )
-    un_augmented_results = pipeline.cross_validate_pipeline(
-        p=pipeline.Pipeline(
-            name=f"augmentation-{pipeline_step_class.__name__}",
-            steps=[unaugmented_pipeline_step],
-        ),
-        train_folds=train_folds,
-        test_folds=test_folds,
-        save_results=False,
+
+    run_info_path = (
+        pathlib.Path(__file__)
+        .parent.joinpath("res")
+        .joinpath("runs")
+        .joinpath("info.json")
+        .resolve()
     )
-    un_augmented_f1 = un_augmented_results[unaugmented_pipeline_step].overall_scores.f1
+    os.makedirs(pathlib.Path(run_info_path).parent.resolve(), exist_ok=True)
+
+    un_augmented_f1: typing.Optional[float] = None
+    if os.path.exists(run_info_path):
+        with open(run_info_path, "r", encoding="utf-8") as f:
+            run_info = json.load(f)
+            if pipeline_step_class.__name__ in run_info:
+                un_augmented_f1 = run_info[pipeline_step_class.__name__]
+    else:
+        run_info = {}
+
+    if un_augmented_f1 is None:
+        un_augmented_results = pipeline.cross_validate_pipeline(
+            p=pipeline.Pipeline(
+                name=f"augmentation-{pipeline_step_class.__name__}",
+                steps=[unaugmented_pipeline_step],
+            ),
+            train_folds=train_folds,
+            test_folds=test_folds,
+            save_results=False,
+        )
+        un_augmented_f1 = un_augmented_results[
+            unaugmented_pipeline_step
+        ].overall_scores.f1
+        run_info[pipeline_step_class.__name__] = un_augmented_f1
+        with open(run_info_path, "w", encoding="utf-8") as f:
+            json.dump(run_info, f)
 
     for strategy_class in strategies:
         print(f"Running optimization for strategy {strategy_class.__name__}")

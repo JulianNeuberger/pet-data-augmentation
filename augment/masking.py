@@ -178,7 +178,6 @@ class TransformerFill(base.BaseTokenReplacementStep):
         n: int = 1,
         spacy_model: str = "en_core_web_sm",
         transformer_model: str = "distilroberta-base",
-        top_k: int = 5,
         device: int = -1,
         tag_groups: typing.List[Pos] = None,
     ):
@@ -186,13 +185,20 @@ class TransformerFill(base.BaseTokenReplacementStep):
         self.n = n
         self.nlp = spacy.load(spacy_model, disable=["ner", "lemmatizer"])
         self.fill_pipeline = transformers.pipeline(
-            "fill-mask", model=transformer_model, top_k=top_k, device=device
+            "fill-mask", model=transformer_model, device=device
         )
         self.pos_tags_to_consider: typing.List[str] = [
             v for group in tag_groups for v in group.tags
         ]
 
         self.tokenizer = transformers.AutoTokenizer.from_pretrained(transformer_model)
+
+    @staticmethod
+    def get_params() -> typing.List[typing.Union[params.Param]]:
+        return [
+            params.IntegerParam(name="n", min_value=1, max_value=20),
+            params.ChoiceParam(name="tag_groups", choices=list(Pos), max_num_picks=4),
+        ]
 
     def get_replacement_candidates(
         self, doc: PetDocument
@@ -239,7 +245,7 @@ if __name__ == "__main__":
         doc = data.pet.NewPetFormatImporter(
             r"C:\Users\Neuberger\PycharmProjects\pet-data-augmentation\jsonl\all.new.jsonl"
         ).do_import()[0]
-        step = ContextualMeaningPerturbation([], 5, tag_groups=[Pos.NOUN])
+        step = TransformerFill([], 5, tag_groups=[Pos.NOUN])
         augs = step.do_augment(doc, 10)
         print(" ".join(t.text for t in doc.tokens))
         print("-----------")

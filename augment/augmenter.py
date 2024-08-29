@@ -30,6 +30,7 @@ class Augmenter:
         augmented_documents = self._steps[0].do_augment(
             document, self._num_augmentations
         )
+        augmented_documents = augmented_documents[: self._num_augmentations]
 
         # apply all remaining steps on each augmented doc,
         # but only create one augmented document

@@ -80,7 +80,7 @@ def test_do_augment():
         relations=[],
     )
 
-    trafo = trafo101.Trafo101Step([doc], n=1)
+    trafo = trafo101.SynonymSubstitution([doc], n=1)
     aug = trafo.do_augment(doc)
 
     print()

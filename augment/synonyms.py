@@ -90,7 +90,7 @@ class SynonymInsertion(base.BaseTokenReplacementStep):
         return replacements[:num_replacements_per_candidate]
 
 
-class Trafo101Step(base.BaseTokenReplacementStep):
+class SynonymSubstitution(base.BaseTokenReplacementStep):
     """
     https://github.com/GEM-benchmark/NL-Augmenter/tree/main/nlaugmenter/transformations/synonym_substitution
     B.101
