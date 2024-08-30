@@ -117,7 +117,7 @@ class RandomInsert(base.AugmentationStep):
     def get_params() -> typing.List[typing.Union[params.Param]]:
         return [
             params.FloatParam(
-                name="insertion_probability", max_value=0.0, min_value=1.0
+                name="insertion_probability", max_value=1.0, min_value=0.0
             ),
         ]
 
