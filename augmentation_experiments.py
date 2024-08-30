@@ -140,7 +140,8 @@ def main():
             raise AssertionError("\n".join([str(e) for e in errors]))
 
     # all_documents = loader.read_documents_from_json("./jsonl/all.jsonl")
-    all_documents = data.pet.NewPetFormatImporter(r"jsonl\all.new.jsonl").do_import()
+    data_path = (pathlib.Path(__file__).parent / "jsonl" / "all.new.jsonl").resolve()
+    all_documents = data.pet.NewPetFormatImporter(str(data_path)).do_import()
     kf = sklearn.model_selection.KFold(
         n_splits=5, random_state=random_state, shuffle=True
     )
