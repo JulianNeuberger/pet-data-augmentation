@@ -27,3 +27,27 @@ class CheatingTransformationStep(base.AugmentationStep):
     @staticmethod
     def get_params() -> typing.List[typing.Union[params.Param]]:
         return []
+
+
+class NoOpAugmentation(base.AugmentationStep):
+    name = "null"
+
+    @staticmethod
+    def get_params() -> typing.List[typing.Union[params.Param]]:
+        return []
+
+    def do_augment(
+        self, doc: PetDocument, num_augments: int
+    ) -> typing.List[PetDocument]:
+        return [doc.copy(clear=[]) for _ in range(num_augments)]
+
+
+class ExceptionThrowing(base.AugmentationStep):
+    def do_augment(
+        self, doc: PetDocument, num_augments: int
+    ) -> typing.List[PetDocument]:
+        raise ValueError("this should show up")
+
+    @staticmethod
+    def get_params() -> typing.List[typing.Union[params.Param]]:
+        return []

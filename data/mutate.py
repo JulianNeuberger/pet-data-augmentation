@@ -2,7 +2,7 @@ import typing
 
 import nltk
 
-from data import PetDocument, PetToken, PetEntity, PetMention
+from data import PetDocument, PetToken, PetEntity, PetMention, PetRelation
 
 
 def insert_tokens_inplace(
@@ -31,6 +31,7 @@ def insert_tokens_inplace(
                     range(index_in_document, index_in_document + len(tokens))
                 )
                 new_token_ids = sorted(new_token_ids)
+            assert len(new_token_ids) != 0
             doc.mentions[m_id] = PetMention(
                 type=m.type, token_document_indices=tuple(new_token_ids)
             )
@@ -142,20 +143,33 @@ def text_to_tokens(
 
 
 def delete_token_inplace(doc: PetDocument, token_id: int) -> None:
-    mention_to_remove = None
+    mention_id_to_remove = None
     for m_id, m in enumerate(doc.mentions):
-        if token_id in m.token_document_indices:
-            if len(m.token_document_indices) == 1:
-                mention_to_remove = m_id
-            else:
-                doc.mentions[m_id] = PetMention(
-                    token_document_indices=tuple(
-                        i for i in m.token_document_indices if i != token_id
-                    ),
-                    type=m.type,
-                )
-    if mention_to_remove is not None:
-        delete_mention_inplace(doc, mention_to_remove)
+        new_token_indices = []
+        for i in m.token_document_indices:
+            if i == token_id:
+                continue
+            index = i
+            if index > token_id:
+                index -= 1
+            new_token_indices.append(index)
+        if len(new_token_indices) == 0:
+            mention_id_to_remove = m_id
+        else:
+            doc.mentions[m_id] = PetMention(
+                token_document_indices=tuple(new_token_indices),
+                type=m.type,
+            )
+    if mention_id_to_remove is not None:
+        delete_mention_inplace(doc, mention_id_to_remove)
+
+    token = doc.tokens[token_id]
+
+    sentence_adjustment = 0
+    sentence = doc.sentences[token.sentence_index]
+    if len(sentence) == 1:
+        # final token in this sentence
+        sentence_adjustment = 1
 
     doc.tokens.pop(token_id)
     for i in range(token_id, len(doc.tokens)):
@@ -163,33 +177,65 @@ def delete_token_inplace(doc: PetDocument, token_id: int) -> None:
         doc.tokens[i] = PetToken(
             text=t.text,
             pos_tag=t.pos_tag,
-            sentence_index=t.sentence_index,
+            sentence_index=t.sentence_index - sentence_adjustment,
             index_in_document=t.index_in_document - 1,
         )
 
 
 def delete_mention_inplace(doc: PetDocument, mention_id: int) -> None:
+    assert all(
+        [r.head_mention_index < len(doc.mentions) for r in doc.relations]
+    ), "broken before"
+    assert all(
+        [r.tail_mention_index < len(doc.mentions) for r in doc.relations]
+    ), "broken before"
+
     # adjust entities
     entity_to_remove = None
     for e_id, e in enumerate(doc.entities):
-        if mention_id in e.mention_indices:
-            if len(e.mention_indices) == 1:
-                entity_to_remove = e_id
-            else:
-                doc.entities[e_id] = PetEntity(
-                    mention_indices=tuple(
-                        i for i in e.mention_indices if i != mention_id
-                    ),
-                )
+        new_mention_ids = []
+        for i in e.mention_indices:
+            if i == mention_id:
+                continue
+            if i > mention_id:
+                i -= 1
+            new_mention_ids.append(i)
+
+        if len(new_mention_ids) == 0:
+            entity_to_remove = e_id
+        else:
+            doc.entities[e_id] = PetEntity(
+                mention_indices=tuple(new_mention_ids),
+            )
     if entity_to_remove is not None:
         delete_entity_inplace(doc, entity_to_remove)
 
     # adjust relations
-    relation_to_remove = None
+    relations_to_remove = []
     for r_id, r in enumerate(doc.relations):
-        if r.head_mention_index == mention_id or r.tail_mention_index == mention_id:
-            relation_to_remove = r_id
-    if relation_to_remove is not None:
+        if r.head_mention_index == mention_id:
+            relations_to_remove.append(r_id)
+            continue
+
+        if r.tail_mention_index == mention_id:
+            relations_to_remove.append(r_id)
+            continue
+
+        new_head_id = r.head_mention_index
+        new_tail_id = r.tail_mention_index
+        if r.head_mention_index > mention_id:
+            new_head_id -= 1
+        if r.tail_mention_index > mention_id:
+            new_tail_id -= 1
+
+        assert new_head_id < len(doc.mentions) - 1
+        assert new_tail_id < len(doc.mentions) - 1
+
+        doc.relations[r_id] = PetRelation(
+            type=r.type, head_mention_index=new_head_id, tail_mention_index=new_tail_id
+        )
+
+    for relation_to_remove in sorted(relations_to_remove, reverse=True):
         delete_relation_inplace(doc, relation_to_remove)
 
     doc.mentions.pop(mention_id)

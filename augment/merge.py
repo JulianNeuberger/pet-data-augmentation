@@ -14,7 +14,8 @@ class MergeDocumentsStep(base.AugmentationStep):
         self, doc: PetDocument, num_augments: int
     ) -> typing.List[PetDocument]:
         dataset = self.dataset.copy()
-        dataset.remove(doc)
+        if doc in dataset:
+            dataset.remove(doc)
 
         augmented = []
 
@@ -23,8 +24,8 @@ class MergeDocumentsStep(base.AugmentationStep):
                 break
 
             augmented_doc = doc.copy(clear=[])
-            other = random.choice(self.dataset)
-            dataset = dataset.remove(other)
+            other = random.choice(dataset)
+            dataset.remove(other)
             augmented_doc.merge(other)
             augmented.append(augmented_doc)
 

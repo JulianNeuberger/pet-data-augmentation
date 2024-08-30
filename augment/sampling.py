@@ -13,12 +13,10 @@ class EntityMentionReplacement(base.BaseTokenReplacementStep):
     B.39
     """
 
-    def __init__(self, dataset: typing.List[PetDocument]):
-        super().__init__(dataset, replacements_per_document=5)
-
-    @staticmethod
-    def get_params() -> typing.List[typing.Union[params.Param]]:
-        return []
+    def __init__(
+        self, dataset: typing.List[PetDocument], replace_probability: float, **kwargs
+    ):
+        super().__init__(dataset, replace_probability, **kwargs)
 
     def get_replacement_candidates(
         self, doc: PetDocument
@@ -58,16 +56,21 @@ class EntityMentionReplacement(base.BaseTokenReplacementStep):
         return replacements[:num_replacements_per_candidate]
 
 
-class TagSubsequenceSubstition(base.BaseTokenReplacementStep):
+class TagSubsequenceSubstitution(base.BaseTokenReplacementStep):
     """
     https://github.com/GEM-benchmark/NL-Augmenter/tree/main/nlaugmenter/transformations/tag_subsequence_substitution
     B.103
     """
 
     def __init__(
-        self, dataset: typing.List[PetDocument], n: int, min_n_gram=1, max_n_gram=4
+        self,
+        dataset: typing.List[PetDocument],
+        replace_probability: float,
+        min_n_gram=1,
+        max_n_gram=4,
+        **kwargs,
     ):
-        super().__init__(dataset, replacements_per_document=n)
+        super().__init__(dataset, replace_probability, **kwargs)
         self.min_n_gram = min_n_gram
         self.max_n_gram = max(self.min_n_gram, max_n_gram)
         self.text_by_pos: typing.Dict[
@@ -92,8 +95,7 @@ class TagSubsequenceSubstition(base.BaseTokenReplacementStep):
 
     @staticmethod
     def get_params() -> typing.List[typing.Union[params.Param]]:
-        return [
-            params.IntegerParam(name="n", min_value=1, max_value=20),
+        return base.BaseTokenReplacementStep.get_params() + [
             params.IntegerParam(name="min_n_gram", min_value=1, max_value=10),
             params.IntegerParam(name="max_n_gram", min_value=1, max_value=10),
         ]

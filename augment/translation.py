@@ -21,12 +21,13 @@ class BackTranslation(base.BaseTokenReplacementStep):
     def __init__(
         self,
         dataset: typing.List[PetDocument],
-        replacements_per_document: int,
+        replace_probability: float,
         segment_length: int = 2,
         lang: str = "de",
         device: str = "cpu",
+        **kwargs,
     ):
-        super().__init__(dataset, replacements_per_document)
+        super().__init__(dataset, replace_probability, **kwargs)
         self.device = device
         self.lang = lang
         self.segment_length = segment_length
@@ -43,11 +44,8 @@ class BackTranslation(base.BaseTokenReplacementStep):
 
     @staticmethod
     def get_params() -> typing.List[typing.Union[params.Param]]:
-        return [
-            params.IntegerParam(
-                name="replacements_per_sentence", min_value=1, max_value=20
-            ),
-            params.IntegerParam(name="num_beams", min_value=1, max_value=20),
+        return base.BaseTokenReplacementStep.get_params() + [
+            params.IntegerParam(name="segment_length", min_value=1, max_value=6),
         ]
 
     def get_replacement_candidates(
@@ -216,10 +214,11 @@ class MultiLingualBackTranslation(base.BaseTokenReplacementStep):
     def __init__(
         self,
         dataset: typing.List[PetDocument],
-        n: int = 10,
+        replace_probability: float,
         pivot_language: str = "de",
+        **kwargs,
     ):
-        super().__init__(dataset, n)
+        super().__init__(dataset, replace_probability, **kwargs)
         self.model = M2M100ForConditionalGeneration.from_pretrained(
             "facebook/m2m100_418M"
         )
@@ -229,11 +228,10 @@ class MultiLingualBackTranslation(base.BaseTokenReplacementStep):
 
     @staticmethod
     def get_params() -> typing.List[typing.Union[params.Param]]:
-        return [
+        return base.BaseTokenReplacementStep.get_params() + [
             params.ChoiceParam(
                 name="pivot_language", choices=MultiLingualBackTranslation.languages
             ),
-            params.IntegerParam(name="n", min_value=1, max_value=20),
         ]
 
     def get_replacement_candidates(
@@ -309,15 +307,15 @@ class LostInTranslation(base.BaseTokenReplacementStep):
     def __init__(
         self,
         dataset: typing.List[PetDocument],
+        replace_probability: float,
         languages: typing.List[str],
         strategy: str = "strict",
         num_translation_hops: int = 5,
-        n: int = 10,
         device: typing.Optional[int] = 0,
+        **kwargs,
     ):
-        super().__init__(dataset, replacements_per_document=5)
+        super().__init__(dataset, replace_probability, **kwargs)
         self.languages = languages
-        self.n = n
         self.strategy = strategy
         self.num_translation_hops = num_translation_hops
 
@@ -341,8 +339,7 @@ class LostInTranslation(base.BaseTokenReplacementStep):
 
     @staticmethod
     def get_params() -> typing.List[typing.Union[params.Param]]:
-        return [
-            params.IntegerParam(name="n", min_value=1, max_value=20),
+        return base.BaseTokenReplacementStep.get_params() + [
             params.ChoiceParam(
                 name="languages",
                 choices=["es", "de", "zh", "fr", "ru"],
@@ -351,7 +348,7 @@ class LostInTranslation(base.BaseTokenReplacementStep):
             params.ChoiceParam(
                 name="strategy", choices=["strict", "shuffle", "random"]
             ),
-            params.IntegerParam(name="num_translations", min_value=1, max_value=5),
+            params.IntegerParam(name="num_translation_hops", min_value=1, max_value=5),
         ]
 
     def get_replacement_candidates(
@@ -387,7 +384,6 @@ class LostInTranslation(base.BaseTokenReplacementStep):
     def back_translate(
         self, texts: typing.List[str], language: str, num_translations: int
     ):
-        print(f"Translating {texts}")
         encode = self.encoders[language]
         decode = self.decoders[language]
 

@@ -1,10 +1,7 @@
 import abc
 import inspect
-import itertools
 import random
 import typing
-
-import nltk.tokenize
 
 from augment import params
 from data import PetDocument, PetToken, PetMention, mutate
@@ -77,17 +74,14 @@ class AugmentationStep(abc.ABC):
 
 class BaseTokenReplacementStep(AugmentationStep, abc.ABC):
     def __init__(
-        self,
-        dataset: typing.List[PetDocument],
-        replacements_per_document: int,
-        **kwargs,
+        self, dataset: typing.List[PetDocument], replace_probability: float, **kwargs
     ):
         super().__init__(dataset, **kwargs)
-        self.replacements_per_document = replacements_per_document
+        self.p = replace_probability
 
     @staticmethod
     def get_params() -> typing.List[typing.Union[params.Param]]:
-        return []
+        return [params.FloatParam("replace_probability", min_value=0.0, max_value=1.0)]
 
     @abc.abstractmethod
     def get_replacement_candidates(
@@ -104,12 +98,16 @@ class BaseTokenReplacementStep(AugmentationStep, abc.ABC):
     ) -> typing.List[typing.List[str]]:
         raise NotImplementedError()
 
+    def should_replace(
+        self, candidate: typing.List[PetToken], num_current_replacements: int
+    ) -> bool:
+        return random.random() < self.p
+
     def augment_single_doc(
         self,
         doc: PetDocument,
         candidates: typing.List[typing.List[PetToken]],
         num_augments: int,
-        max_replacements_per_candidate: int,
     ) -> typing.List[PetDocument]:
         num_annotations_before = (
             len(doc.mentions),
@@ -122,12 +120,10 @@ class BaseTokenReplacementStep(AugmentationStep, abc.ABC):
                 f'Replacement strategy "{self.__class__.__name__}" did not find any candidates!'
             )
         candidate_replacements: typing.Dict[
-            typing.Tuple[PetToken, ...], typing.List[typing.List[str]]
+            typing.Tuple[PetToken, ...], typing.Dict[str, typing.List[typing.List[str]]]
         ] = {}
         for candidate in candidates:
-            replacement_texts = self.get_replacements(
-                candidate, max_replacements_per_candidate, doc
-            )
+            replacement_texts = self.get_replacements(candidate, 5, doc)
             # remove identical replacements
             replacement_texts = [
                 t
@@ -141,42 +137,45 @@ class BaseTokenReplacementStep(AugmentationStep, abc.ABC):
                 )
                 continue
 
-            candidate_replacements[tuple(candidate)] = replacement_texts
+            candidate_replacements[tuple(candidate)] = {
+                "unused": replacement_texts,
+                "all": list(replacement_texts),
+            }
 
         augmented_docs = []
         for _ in range(num_augments):
             changed = False
             augmented_doc = doc.copy(clear=[])
-            possible_candidates = list(candidate_replacements.keys())
-
-            chosen_candidates: typing.List[typing.Tuple[PetToken, ...]] = []
-            for _ in range(self.replacements_per_document):
-                if len(possible_candidates) == 0:
-                    break
-                chosen_candidate: typing.Tuple[PetToken, ...] = random.choice(
-                    possible_candidates
-                )
-                chosen_candidates.append(chosen_candidate)
-                possible_candidates.remove(chosen_candidate)
-            chosen_candidates = sorted(
-                chosen_candidates,
+            candidates = list(candidate_replacements.keys())
+            candidates = [
+                c for i, c in enumerate(candidates) if self.should_replace(list(c), i)
+            ]
+            candidates = sorted(
+                candidates,
                 key=lambda c: min(t.index_in_document for t in c),
                 reverse=True,
             )
 
-            for chosen_candidate in chosen_candidates:
-                replacements = candidate_replacements[chosen_candidate]
+            num_replacements = 0
+            for candidate in candidates:
+                # try to pick an unused replacement and fall back to used ones
+                replacements = candidate_replacements[candidate]["unused"]
+                is_unused = True
+                if len(replacements) == 0:
+                    replacements = candidate_replacements[candidate]["all"]
+                    is_unused = False
+
                 replacement = random.choice(replacements)
-                replacements.remove(replacement)
-                if len(candidate_replacements[chosen_candidate]) == 0:
-                    del candidate_replacements[chosen_candidate]
+                if is_unused:
+                    replacements.remove(replacement)
 
                 mutate.replace_sequence_inplace(
                     augmented_doc,
-                    chosen_candidate[0].index_in_document,
-                    chosen_candidate[-1].index_in_document + 1,
+                    candidate[0].index_in_document,
+                    candidate[-1].index_in_document + 1,
                     replacement,
                 )
+                num_replacements += 1
                 changed = True
             num_annotations_after = (
                 len(augmented_doc.mentions),
@@ -197,20 +196,4 @@ class BaseTokenReplacementStep(AugmentationStep, abc.ABC):
         self, doc: PetDocument, num_augments: int
     ) -> typing.List[PetDocument]:
         all_candidates = self.get_replacement_candidates(doc)
-        random.shuffle(all_candidates)
-
-        planned_replacements = [all_candidates]
-        if len(all_candidates) > self.replacements_per_document:
-            planned_replacements = itertools.combinations(
-                all_candidates, r=self.replacements_per_document
-            )
-
-        docs = []
-        for planned_replacement in planned_replacements:
-            docs.extend(
-                self.augment_single_doc(doc, planned_replacement, num_augments, 5)
-            )
-            if len(docs) >= num_augments:
-                break
-
-        return docs
+        return self.augment_single_doc(doc, all_candidates, num_augments)

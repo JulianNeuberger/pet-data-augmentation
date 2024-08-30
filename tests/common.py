@@ -1,73 +1,53 @@
 import inspect
 import typing
 
-from data import model
 from augment import base
-
-
-def collect_all_trafos(base_class: typing.Type) -> typing.List[typing.Type[base.AugmentationStep]]:
-    sub_classes = []
-
-    immediate_sub_classes = base_class.__subclasses__()
-    sub_classes.extend([c for c in immediate_sub_classes if not inspect.isabstract(c)])
-    for sub_class in immediate_sub_classes:
-        child_sub_classes = collect_all_trafos(sub_class)
-        sub_classes.extend(child_sub_classes)
-
-    return sub_classes
+from data import PetDocument, PetToken, PetRelation, PetEntity, PetMention
 
 
 def document_fixture():
-    doc = model.Document(
+    doc = PetDocument(
+        id="",
         text="",
         name="test",
-        sentences=[
-            model.Sentence(
-                tokens=[
-                    model.Token("This", 0, "A", "O", 0),
-                    model.Token("is", 1, "B", "O", 0),
-                    model.Token("a", 2, "C", "O", 0),
-                    model.Token("sentence", 3, "A", "B-Object", 0),
-                    model.Token(".", 4, "A", "O", 0),
-                ]
-            ),
-            model.Sentence(
-                tokens=[
-                    model.Token("And", 5, "A", "O", 1),
-                    model.Token("another", 6, "B", "B-Object", 1),
-                    model.Token("one", 7, "C", "I-Object", 1),
-                    model.Token("!", 8, "A", "0", 1),
-                ]
-            ),
-            model.Sentence(
-                tokens=[
-                    model.Token("Here", 9, "A", "B-Something", 2),
-                    model.Token("comes", 10, "B", "B-Activity", 2),
-                    model.Token("the", 11, "C", "O", 2),
-                    model.Token("last", 12, "C", "O", 2),
-                    model.Token("one", 13, "C", "B-Object", 2),
-                    model.Token(".", 14, "A", "0", 2),
-                ]
-            ),
+        category="",
+        tokens=[
+            # sentence 1
+            PetToken("This", 0, "A", 0),
+            PetToken("is", 1, "B", 0),
+            PetToken("a", 2, "C", 0),
+            PetToken("sentence", 3, "A", 0),
+            PetToken(".", 4, "A", 0),
+            # sentence 2
+            PetToken("And", 5, "A", 1),
+            PetToken("another", 6, "B", 1),
+            PetToken("one", 7, "C", 1),
+            PetToken("!", 8, "A", 1),
+            # sentence 3
+            PetToken("Here", 9, "A", 2),
+            PetToken("comes", 10, "B", 2),
+            PetToken("the", 11, "C", 2),
+            PetToken("last", 12, "C", 2),
+            PetToken("one", 13, "C", 2),
+            PetToken(".", 14, "A", 2),
         ],
         mentions=[
-            model.Mention("Object", 0, [3]),
-            model.Mention("Object", 1, [1, 2]),
-            model.Mention("Something", 2, [0]),
-            model.Mention("Activity", 2, [1]),
-            model.Mention("Object", 2, [4]),
+            PetMention("Object", tuple([3])),
+            PetMention("Object", tuple([1, 2])),
+            PetMention("Something", tuple([10])),
+            PetMention("Activity", tuple([12])),
+            PetMention("Object", tuple([13])),
         ],
         entities=[
-            model.Entity([0, 1]),
-            model.Entity([2]),
-            model.Entity([3]),
-            model.Entity([4]),
+            PetEntity(tuple([0, 1])),
+            PetEntity(tuple([2])),
+            PetEntity(tuple([3])),
+            PetEntity(tuple([4])),
         ],
         relations=[
-            model.Relation(0, 2, "Testtag", [0, 2]),
-            model.Relation(1, 2, "Othertag", [1, 2]),
-            model.Relation(3, 2, "Lasttag", [2]),
+            PetRelation("Testtag", 0, 1),
+            PetRelation("Othertag", 1, 4),
+            PetRelation("Lasttag", 3, 1),
         ],
     )
     return doc
-

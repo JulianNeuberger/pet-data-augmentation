@@ -9,11 +9,9 @@ from data import PetDocument
 
 
 class Augmenter:
-    def __init__(
-        self, steps: typing.List[base.AugmentationStep], num_augmentations: int
-    ):
+    def __init__(self, steps: typing.List[base.AugmentationStep], num_augments: int):
         self._steps = steps
-        self._num_augmentations = num_augmentations
+        self._num_augmentations = num_augments
         self._augmented_docs: typing.Dict[str, typing.List[PetDocument]] = {}
 
     def augment(self, document: PetDocument) -> typing.List[PetDocument]:
@@ -64,11 +62,12 @@ def run_augmentation(
     augmentation_rate_per_document = get_augmentation_rates(
         len(dataset), augmentation_rate
     )
+    expected_new_documents = np.sum(augmentation_rate_per_document)
 
     print(
         f"Augmenting {len(dataset)} documents with "
         f"augmentation factor of {augmentation_rate:.4f} "
-        f"resulting in {np.sum(augmentation_rate_per_document)} new documents "
+        f"resulting in {expected_new_documents} new documents "
         f"using strategies {[type(s).__name__ for s in steps]}..."
     )
 
@@ -85,6 +84,13 @@ def run_augmentation(
             for step in steps[1:]:
                 augmented_doc = step.do_augment(augmented_doc, 1)
             augmented_dataset.append(augmented_doc)
+
+    # pad dataset if augmentation strategy could not generate enough new samples
+    if len(augmented_dataset) < expected_new_documents:
+        additionals = []
+        for _ in range(expected_new_documents - len(augmented_dataset)):
+            additionals.append(random.choice(augmented_dataset).copy(clear=[]))
+        augmented_dataset += additionals
 
     # add original dataset
     augmented_dataset.extend([d.copy(clear=[]) for d in dataset])

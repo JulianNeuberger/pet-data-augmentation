@@ -22,11 +22,10 @@ class ContextualMeaningPerturbation(base.BaseTokenReplacementStep):
     def __init__(
         self,
         dataset: typing.List[PetDocument],
-        n=1,
-        tag_groups: typing.List[Pos] = None,
+        replace_probability: float,
+        tag_groups: typing.List[Pos],
     ):
-        super().__init__(dataset, replacements_per_document=5)
-        self.n = n
+        super().__init__(dataset, replace_probability=replace_probability)
         self.unmasker = pipeline("fill-mask", model="xlm-roberta-base", top_k=5)
         self.pos_tags_to_consider: typing.List[str] = [
             v.lower() for group in tag_groups for v in group.tags
@@ -34,9 +33,8 @@ class ContextualMeaningPerturbation(base.BaseTokenReplacementStep):
 
     @staticmethod
     def get_params() -> typing.List[typing.Union[params.Param]]:
-        return [
+        return base.BaseTokenReplacementStep.get_params() + [
             params.ChoiceParam(name="tag_groups", choices=list(Pos), max_num_picks=4),
-            params.IntegerParam(name="n", min_value=1, max_value=20),
         ]
 
     @staticmethod
@@ -81,8 +79,8 @@ class HyponymReplacement(base.BaseTokenReplacementStep):
     https://github.com/GEM-benchmark/NL-Augmenter/tree/main/nlaugmenter/transformations/replace_with_hyponyms_hypernyms
     """
 
-    def __init__(self, dataset: typing.List[PetDocument], n: int = 10):
-        super().__init__(dataset, replacements_per_document=n)
+    def __init__(self, dataset: typing.List[PetDocument], replace_probability: float):
+        super().__init__(dataset, replace_probability=replace_probability)
         self.editor = Editor()
 
     def get_replacement_candidates(
@@ -127,8 +125,8 @@ class HypernymReplacement(base.BaseTokenReplacementStep):
     https://github.com/GEM-benchmark/NL-Augmenter/tree/main/nlaugmenter/transformations/replace_with_hyponyms_hypernyms
     """
 
-    def __init__(self, dataset: typing.List[PetDocument], n: int = 10):
-        super().__init__(dataset, replacements_per_document=n)
+    def __init__(self, dataset: typing.List[PetDocument], replace_probability: float):
+        super().__init__(dataset, replace_probability=replace_probability)
         self.editor = Editor()
 
     def get_replacement_candidates(
@@ -175,14 +173,13 @@ class TransformerFill(base.BaseTokenReplacementStep):
     def __init__(
         self,
         dataset: typing.List[PetDocument],
-        n: int = 1,
+        replace_probability: float = 0.5,
         spacy_model: str = "en_core_web_sm",
         transformer_model: str = "distilroberta-base",
         device: int = -1,
         tag_groups: typing.List[Pos] = None,
     ):
-        super().__init__(dataset, replacements_per_document=n)
-        self.n = n
+        super().__init__(dataset, replace_probability=replace_probability)
         self.nlp = spacy.load(spacy_model, disable=["ner", "lemmatizer"])
         self.fill_pipeline = transformers.pipeline(
             "fill-mask", model=transformer_model, device=device
@@ -195,8 +192,7 @@ class TransformerFill(base.BaseTokenReplacementStep):
 
     @staticmethod
     def get_params() -> typing.List[typing.Union[params.Param]]:
-        return [
-            params.IntegerParam(name="n", min_value=1, max_value=20),
+        return base.BaseTokenReplacementStep.get_params() + [
             params.ChoiceParam(name="tag_groups", choices=list(Pos), max_num_picks=4),
         ]
 
@@ -245,7 +241,7 @@ if __name__ == "__main__":
         doc = data.pet.NewPetFormatImporter(
             r"C:\Users\Neuberger\PycharmProjects\pet-data-augmentation\jsonl\all.new.jsonl"
         ).do_import()[0]
-        step = TransformerFill([], 5, tag_groups=[Pos.NOUN])
+        step = TransformerFill([], 0.25, tag_groups=[Pos.NOUN])
         augs = step.do_augment(doc, 10)
         print(" ".join(t.text for t in doc.tokens))
         print("-----------")

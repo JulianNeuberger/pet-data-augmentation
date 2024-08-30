@@ -6,7 +6,7 @@ import typing
 import nltk
 
 import data
-from augment import params, base, grammaire
+from augment import base, grammaire
 from augment.base import BaseTokenReplacementStep
 from data import PetDocument, PetToken
 
@@ -20,11 +20,13 @@ class BaseAbbreviationStep(BaseTokenReplacementStep, abc.ABC):
     def __init__(
         self,
         dataset: typing.List[PetDocument],
-        abbreviations: typing.Dict[str, typing.List[str]],
+        replace_probability: float,
         case_sensitive: bool = False,
+        **kwargs
     ):
-        super().__init__(dataset, replacements_per_document=5)
+        super().__init__(dataset, replace_probability, **kwargs)
         self.case_sensitive = case_sensitive
+        abbreviations = self.get_abbreviations()
         self.expansions = abbreviations
 
         self.contractions: typing.Dict[str, typing.List[str]] = {}
@@ -33,6 +35,10 @@ class BaseAbbreviationStep(BaseTokenReplacementStep, abc.ABC):
                 if value not in self.contractions:
                     self.contractions[value] = []
                 self.contractions[value].append(key)
+
+    @abc.abstractmethod
+    def get_abbreviations(self) -> typing.Dict[str, typing.List[str]]:
+        raise NotImplementedError()
 
     def get_contraction_candidates(
         self, doc: PetDocument
@@ -99,16 +105,7 @@ class ContractionsAndExpansionsPerturbation(BaseAbbreviationStep):
     B.27
     """
 
-    def __init__(self, dataset: typing.List[PetDocument]):
-        abbreviations = self._load()
-        super().__init__(dataset, abbreviations)
-
-    @staticmethod
-    def get_params() -> typing.List[typing.Union[params.Param]]:
-        return []
-
-    @staticmethod
-    def _load() -> typing.Dict[str, typing.List[str]]:
+    def get_abbreviations(self) -> typing.Dict[str, typing.List[str]]:
         abbreviations = {}
         resources_path = (
             pathlib.Path(__file__).parent.parent.joinpath("resources").resolve()
@@ -124,14 +121,16 @@ class ContractionsAndExpansionsPerturbation(BaseAbbreviationStep):
         return abbreviations
 
 
-class EnglishAndFrenchAbbreviations(base.BaseTokenReplacementStep):
+class InsertAbbreviations(base.BaseTokenReplacementStep):
     """
     https://github.com/GEM-benchmark/NL-Augmenter/tree/main/nlaugmenter/transformations/insert_abbreviation
     B.52
     """
 
-    def __init__(self, dataset: typing.List[PetDocument]):
-        super().__init__(dataset, replacements_per_document=5)
+    def __init__(
+        self, dataset: typing.List[PetDocument], replace_probability: float, **kwargs
+    ):
+        super().__init__(dataset, replace_probability, **kwargs)
         rules_path = (
             pathlib.Path(__file__)
             .parent.parent.joinpath("resources")
@@ -156,9 +155,6 @@ class EnglishAndFrenchAbbreviations(base.BaseTokenReplacementStep):
         stop: int
         for label, (start, stop) in results:
             tokens = doc.tokens_for_character_indices(start, stop)
-            print(
-                f"Parser found label \"{label}\", we retrieved tokens \"{' '.join(t.text for t in tokens)}\""
-            )
             candidates.append(tokens)
         return candidates
 
@@ -176,10 +172,6 @@ class EnglishAndFrenchAbbreviations(base.BaseTokenReplacementStep):
                 return [nltk.tokenize.word_tokenize(label)]
         return []
 
-    @staticmethod
-    def get_params() -> typing.List[typing.Union[params.Param]]:
-        return []
-
 
 class ReplaceAbbreviationsAndAcronyms(BaseAbbreviationStep):
     """
@@ -187,16 +179,7 @@ class ReplaceAbbreviationsAndAcronyms(BaseAbbreviationStep):
     B.82
     """
 
-    def __init__(self, dataset: typing.List[PetDocument]):
-        abbreviations = self._load()
-        super().__init__(dataset, abbreviations)
-
-    @staticmethod
-    def get_params() -> typing.List[typing.Union[params.Param]]:
-        return []
-
-    @staticmethod
-    def _load() -> typing.Dict[str, typing.List[str]]:
+    def get_abbreviations(self) -> typing.Dict[str, typing.List[str]]:
         abbreviations = {}
 
         abbreviations_path = (
@@ -224,16 +207,7 @@ class UseAcronyms(BaseAbbreviationStep):
     B.110
     """
 
-    def __init__(self, dataset: typing.List[PetDocument]):
-        abbreviations = self._load()
-        super().__init__(dataset, abbreviations)
-
-    @staticmethod
-    def get_params() -> typing.List[typing.Union[params.Param]]:
-        return []
-
-    @staticmethod
-    def _load() -> typing.Dict[str, typing.List[str]]:
+    def get_abbreviations(self) -> typing.Dict[str, typing.List[str]]:
         abbreviations = {}
 
         abbreviations_path = (
@@ -261,7 +235,7 @@ if __name__ == "__main__":
         doc = data.pet.NewPetFormatImporter(
             r"C:\Users\Neuberger\PycharmProjects\pet-data-augmentation\jsonl\all.new.jsonl"
         ).do_import()[0]
-        step = ContractionsAndExpansionsPerturbation([])
+        step = UseAcronyms([], replace_probability=0.5)
         augs = step.do_augment(doc, 10)
         print(" ".join(t.text for t in doc.tokens))
         print("-----------")

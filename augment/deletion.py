@@ -23,11 +23,11 @@ class RandomDeletion(base.AugmentationStep):
         ]
 
     def do_augment(
-        self, doc: PetDocument, num_augmentations: int
+        self, doc: PetDocument, num_augments: int
     ) -> typing.List[PetDocument]:
         augmented_documents = []
 
-        for _ in range(num_augmentations):
+        for _ in range(num_augments):
             aug_doc = doc.copy(clear=[])
             mask = np.random.binomial(1, 1 - self.p, len(aug_doc.tokens)) == 1
             mask = np.flip(mask)

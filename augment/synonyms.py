@@ -6,7 +6,7 @@ from nltk.corpus import stopwords, wordnet
 
 import data
 from augment import base, params
-from data import PetDocument, PetToken, mutate
+from data import PetDocument, PetToken
 from pos_enum import Pos
 
 nltk.download("stopwords")
@@ -18,10 +18,11 @@ class SynonymInsertion(base.BaseTokenReplacementStep):
     B.100
     """
 
-    def __init__(self, dataset: typing.List[PetDocument], prob=0.5, n: int = 10):
-        super().__init__(dataset, n)
+    def __init__(
+        self, dataset: typing.List[PetDocument], replace_probability: float, **kwargs
+    ):
+        super().__init__(dataset, replace_probability, **kwargs)
         self.seed = 42
-        self.prob = prob
         self.stopwords = stopwords.words("english")
         random.seed(self.seed)
         self.relevant_pos = Pos.VERB.tags + Pos.AD.tags + Pos.NOUN.tags
@@ -38,12 +39,6 @@ class SynonymInsertion(base.BaseTokenReplacementStep):
             return wordnet.ADV
         else:
             return ""
-
-    @staticmethod
-    def get_params() -> typing.List[typing.Union[params.Param]]:
-        return [
-            params.FloatParam(name="prob", min_value=0.0, max_value=1.0),
-        ]
 
     def get_replacement_candidates(
         self, doc: PetDocument
@@ -97,13 +92,9 @@ class SynonymSubstitution(base.BaseTokenReplacementStep):
     """
 
     def __init__(
-        self,
-        dataset: typing.List[PetDocument],
-        prob: float = 1,
-        n: int = 10,
+        self, dataset: typing.List[PetDocument], replace_probability: float, **kwargs
     ):
-        super().__init__(dataset, n)
-        self.prob = prob
+        super().__init__(dataset, replace_probability, **kwargs)
         self.relevant_pos = Pos.VERB.tags + Pos.AD.tags + Pos.NOUN.tags
 
     @staticmethod
@@ -118,10 +109,6 @@ class SynonymSubstitution(base.BaseTokenReplacementStep):
             return wordnet.ADV
         else:
             return ""
-
-    @staticmethod
-    def get_params() -> typing.List[typing.Union[params.Param]]:
-        return [params.FloatParam(name="prob", min_value=0.0, max_value=1.0)]
 
     def get_replacement_candidates(
         self, doc: PetDocument

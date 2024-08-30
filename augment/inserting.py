@@ -3,7 +3,7 @@ import typing
 
 import data
 from augment import base, params
-from data import PetDocument, PetToken, mutate
+from data import PetDocument, mutate
 
 
 class FillerWordAugmentation(base.AugmentationStep):
@@ -53,13 +53,13 @@ class FillerWordAugmentation(base.AugmentationStep):
     def __init__(
         self,
         dataset: typing.List[PetDocument],
-        n: int = 10,
+        insert_probability: float,
         insert_speaker_phrases: bool = True,
         insert_uncertainty_phrases: bool = True,
         insert_filler_phrases: bool = True,
     ):
         super().__init__(dataset)
-        self.n = n
+        self.p = insert_probability
         self.insert_speaker_phrases = insert_speaker_phrases
         self.insert_uncertainty_phrases = insert_uncertainty_phrases
         self.insert_filler_phrases = insert_filler_phrases
@@ -67,10 +67,10 @@ class FillerWordAugmentation(base.AugmentationStep):
     @staticmethod
     def get_params() -> typing.List[typing.Union[params.Param]]:
         return [
-            params.IntegerParam(name="n", min_value=1, max_value=20),
             params.BooleanParameter(name="insert_speaker_phrases"),
             params.BooleanParameter(name="insert_uncertainty_phrases"),
             params.BooleanParameter(name="insert_filler_phrases"),
+            params.FloatParam(name="insert_probability", min_value=0.0, max_value=1.0),
         ]
 
     def get_phrases(self):
@@ -92,14 +92,51 @@ class FillerWordAugmentation(base.AugmentationStep):
         augmented_documents = []
         for _ in range(num_augments):
             augmented_doc = doc.copy(clear=[])
-            for _ in range(self.n):
-                index = random.randrange(0, len(augmented_doc.tokens))
+            for i in reversed(range(len(doc.tokens))):
+                if random.random() > self.p:
+                    continue
                 phrase = random.choice(phrases)
                 phrase_texts = phrase.split()
-                mutate.insert_texts_inplace(augmented_doc, phrase_texts, index)
+                mutate.insert_texts_inplace(augmented_doc, phrase_texts, i)
             augmented_documents.append(augmented_doc)
 
         return augmented_documents
+
+
+class RandomInsert(base.AugmentationStep):
+    def __init__(self, dataset: typing.List[PetDocument], insertion_probability: float):
+        super().__init__(dataset)
+        self.p = insertion_probability
+        vocab = set()
+        for document in dataset:
+            for token in document.tokens:
+                vocab.add(token.text)
+        self.vocab = list(vocab)
+
+    @staticmethod
+    def get_params() -> typing.List[typing.Union[params.Param]]:
+        return [
+            params.FloatParam(
+                name="insertion_probability", max_value=0.0, min_value=1.0
+            ),
+        ]
+
+    def do_augment(
+        self, doc: PetDocument, num_augments: int
+    ) -> typing.List[PetDocument]:
+        augmented = []
+
+        for _ in range(num_augments):
+            augmented_doc = doc.copy(clear=[])
+            for i in reversed(range(len(doc.tokens))):
+                if random.random() > self.p:
+                    continue
+
+                token_text = random.choice(self.vocab)
+                mutate.insert_texts_inplace(augmented_doc, [token_text], i)
+            augmented.append(augmented_doc)
+
+        return augmented
 
 
 if __name__ == "__main__":
@@ -109,7 +146,7 @@ if __name__ == "__main__":
             r"C:\Users\Neuberger\PycharmProjects\pet-data-augmentation\jsonl\all.new.jsonl"
         ).do_import()
         doc = docs.pop(0)
-        step = FillerWordAugmentation(docs)
+        step = FillerWordAugmentation(docs, 0.5)
         augs = step.do_augment(doc, 10)
         print(" ".join(t.text for t in doc.tokens))
         print("-----------")

@@ -1,16 +1,16 @@
-
-
-from augment import base, params
-from tests.common import collect_all_trafos, document_fixture
+from augment import base, params, collect_all_augmentations
+from tests.common import document_fixture
 
 
 def test_do_augment():
-    trafo_classes = collect_all_trafos(base.AugmentationStep)
+    trafo_classes = collect_all_augmentations(base.AugmentationStep)
     print(trafo_classes)
     for clazz in trafo_classes:
         print(f"Testing {clazz.__name__}...")
         doc = document_fixture()
-        args = {"dataset": [doc]}
+        dataset = [doc.copy(clear=[]), doc.copy(clear=[]).merge(doc.copy(clear=[]))]
+        test_dataset = [doc.copy(clear=[])]
+        args = {}
         for param in clazz.get_params():
             if isinstance(param, params.NumberParam):
                 args[param.name] = param.max_value
@@ -20,5 +20,5 @@ def test_do_augment():
                     args[param.name] = [param.choices[0]]
             elif isinstance(param, params.BooleanParameter):
                 args[param.name] = True
-        trafo = clazz(**args)
-        augmented = trafo.do_augment(doc)
+        trafo = clazz(dataset, **args)
+        augmented = trafo.do_augment(doc, num_augments=5)

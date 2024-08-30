@@ -1,3 +1,4 @@
+import datetime
 import json
 import os
 import pathlib
@@ -15,9 +16,11 @@ import pipeline
 from augment import params
 from data import PetDocument
 
-strategies: typing.List[typing.Type[augment.AugmentationStep]] = [
-    augment.SynonymSubstitution
-]
+strategies: typing.List[typing.Type[augment.AugmentationStep]] = (
+    augment.collect_all_augmentations(augment.base.AugmentationStep)
+)
+# randomize the order in which the strategies are tested, should improve parallelization...
+random.shuffle(strategies)
 
 max_runs_per_step = 25
 random_state = 42
@@ -164,14 +167,10 @@ def main():
         name="crf mention extraction", **kwargs
     )
 
-    run_info_path = (
-        pathlib.Path(__file__)
-        .parent.joinpath("res")
-        .joinpath("runs")
-        .joinpath("info.json")
-        .resolve()
-    )
-    os.makedirs(pathlib.Path(run_info_path).parent.resolve(), exist_ok=True)
+    run_folder = pathlib.Path(__file__).parent.joinpath("res").joinpath("runs")
+
+    run_info_path = run_folder.joinpath("info.json").resolve()
+    os.makedirs(run_folder.resolve(), exist_ok=True)
 
     un_augmented_f1: typing.Optional[float] = None
     if os.path.exists(run_info_path):
@@ -213,8 +212,9 @@ def main():
             direction="maximize",
             load_if_exists=True,
             study_name=f"{strategy_class.__name__}-{pipeline_step_class.__name__}",
-            # storage="mysql://optuna@localhost/pet_data_augment",
+            storage="mysql://optuna@localhost/pet_data_augment",
         )
+        print("Study created.")
         trials = study.get_trials(states=(optuna.trial.TrialState.COMPLETE,))
         if len(trials) >= max_runs_per_step:
             print(
@@ -235,7 +235,19 @@ def main():
             if type(e) == KeyboardInterrupt:
                 raise e
             print(f"Error in strategy {strategy_class.__name__}, skipping.")
-            print(traceback.format_exc())
+            trace = traceback.format_exc()
+            print(trace)
+            strategy_name = strategy_class.__name__
+            pipeline_step_name = pipeline_step_class.__name__
+            date_formatted = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            with open(
+                run_folder.joinpath(
+                    f"{pipeline_step_name[:6]}_{strategy_name}_{date_formatted}.err"
+                ),
+                "w",
+                encoding="utf-8",
+            ) as f:
+                f.write(trace)
 
 
 if __name__ == "__main__":
