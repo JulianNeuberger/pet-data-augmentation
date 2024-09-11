@@ -65,7 +65,6 @@ class ContextualMeaningPerturbation(base.BaseTokenReplacementStep):
         masked_sentence = self.mask(
             [t.text for t in sentence], [document.token_index_in_sentence(candidate[0])]
         )
-        print(masked_sentence)
         unmasking_options = self.unmasker(masked_sentence)
         new_tokens = [o["token_str"] for o in unmasking_options]
         new_tokens = [t for t in new_tokens if t != original]

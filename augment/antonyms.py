@@ -18,7 +18,9 @@ class AntonymInversionStep(base.BaseTokenReplacementStep):
     def get_replacement_candidates(
         self, document: PetDocument
     ) -> typing.List[typing.List[PetToken]]:
-        return [[t] for t in document.tokens if t.pos_tag in ["JJ", "JJR", "JJS"]]
+        candidates = [[t] for t in document.tokens if t.pos_tag in ["JJ", "JJR", "JJS"]]
+        candidates = [c for c in candidates if len(self.antonym(c)) > 0]
+        return candidates
 
     def get_replacements(
         self,
@@ -26,6 +28,10 @@ class AntonymInversionStep(base.BaseTokenReplacementStep):
         num_replacements_per_candidate: int,
         document: PetDocument,
     ) -> typing.List[typing.List[str]]:
+        return self.antonym(candidate)
+
+    @staticmethod
+    def antonym(candidate: typing.List[PetToken]):
         text = " ".join(t.text for t in candidate)
 
         syn_sets = wordnet.synsets(text, "a")
@@ -79,6 +85,9 @@ class EvenAntonymsSubstitute(base.AugmentationStep):
                 if len(right_antonym) == 0:
                     continue
                 candidates.append((left, right))
+
+        if len(candidates) == 0:
+            print(f'No candidates in document with text "{doc.text}"')
 
         augmented_docs = []
         for _ in range(num_augments):

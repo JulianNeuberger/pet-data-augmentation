@@ -16,9 +16,12 @@ import pipeline
 from augment import params
 from data import PetDocument
 
-strategies: typing.List[typing.Type[augment.AugmentationStep]] = (
-    augment.collect_all_augmentations(augment.base.AugmentationStep)
-)
+# strategies: typing.List[typing.Type[augment.AugmentationStep]] = (
+#     augment.collect_all_augmentations(augment.base.AugmentationStep)
+# )
+strategies: typing.List[typing.Type[augment.AugmentationStep]] = [
+    augment.BackTranslation
+]
 # randomize the order in which the strategies are tested, should improve parallelization...
 random.shuffle(strategies)
 
@@ -147,14 +150,15 @@ def main():
     )
     fold_indices = list(kf.split(all_documents))
 
-    # pipeline_step_class = pipeline.CrfMentionEstimatorStep
-    pipeline_step_class = pipeline.CatBoostRelationExtractionStep
+    pipeline_step_class = pipeline.CrfMentionEstimatorStep
+    kwargs = {}
 
-    kwargs = {
-        "num_trees": 100,
-        "device": device,
-        "device_ids": device_ids,
-    }
+    # pipeline_step_class = pipeline.CatBoostRelationExtractionStep
+    # kwargs = {
+    #     "num_trees": 100,
+    #     "device": device,
+    #     "device_ids": device_ids,
+    # }
 
     train_folds: typing.List[typing.List[PetDocument]] = []
     test_folds: typing.List[typing.List[PetDocument]] = []
@@ -165,7 +169,7 @@ def main():
         test_folds.append(test_documents)
 
     unaugmented_pipeline_step = pipeline_step_class(
-        name="crf mention extraction", **kwargs
+        name=pipeline_step_class.__name__, **kwargs
     )
 
     run_folder = pathlib.Path(__file__).parent.joinpath("res").joinpath("runs")

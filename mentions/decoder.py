@@ -6,7 +6,6 @@ from data import PetDocument, PetMention, PetToken
 def decode_predictions(
     document: PetDocument, predictions: typing.List[typing.List[str]]
 ) -> PetDocument:
-    print(predictions)
     assert len(document.sentences) == len(predictions)
 
     tokens = []
@@ -41,6 +40,7 @@ def decode_predictions(
                     )
                 )
                 current_mention_tag = None
+                current_mention_token_indices = []
 
             if is_entity_start:
                 current_mention_tag = tag

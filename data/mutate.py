@@ -6,16 +6,34 @@ from data import PetDocument, PetToken, PetEntity, PetMention, PetRelation
 
 
 def insert_tokens_inplace(
-    doc: PetDocument, tokens: typing.List[PetToken], index_in_document: int
+    doc: PetDocument,
+    tokens: typing.List[PetToken],
+    index_in_document: int,
+    expand_mention_id: typing.Optional[int] = None,
 ) -> None:
+    if expand_mention_id is not None:
+        expanded_mention = doc.mentions[expand_mention_id]
+        assert (
+            min(expanded_mention.token_document_indices)
+            <= index_in_document
+            <= max(expanded_mention.token_document_indices) + 1
+        ), (
+            f"Trying to insert tokens at {index_in_document}, "
+            f"but this index is not inside or adjacent to the "
+            f"mention (id={expand_mention_id}, "
+            f"start={min(expanded_mention.token_document_indices)}, "
+            f"end={max(expanded_mention.token_document_indices)}) "
+            f"that should be expanded by it."
+        )
+
     # first, adjust all mention token indices that are affected
     for m_id, m in enumerate(doc.mentions):
         new_token_ids = []
         affected = False
-        # will be true, if the inserted sequence is inside a mention or "touches" it on the right side
+        # will be true, if the inserted sequence is inside a mention
         expanded = (
             min(m.token_document_indices)
-            < index_in_document
+            <= index_in_document
             <= max(m.token_document_indices)
         )
         for token_id in m.token_document_indices:
@@ -25,7 +43,7 @@ def insert_tokens_inplace(
                 affected = True
                 new_token_ids.append(token_id + len(tokens))
         if affected:
-            if expanded:
+            if expanded or m_id == expanded:
                 # inserted tokens into a mention!
                 new_token_ids += list(
                     range(index_in_document, index_in_document + len(tokens))
@@ -130,7 +148,7 @@ def swap_sentences_inplace(
 def text_to_tokens(
     document: PetDocument, texts: typing.List[str], index_in_document: int
 ) -> typing.List[PetToken]:
-    text_pos = nltk.pos_tag(texts)
+    text_pos = [p for _, p in nltk.pos_tag(texts)]
     indices = range(index_in_document, index_in_document + len(texts))
     sentence_id = 0
     if index_in_document > 0:
@@ -255,6 +273,29 @@ def replace_sequence_inplace(
     sequence_end: int,
     replacement: typing.List[str],
 ) -> None:
+    affected_mention = doc.get_mention_for_token(doc.tokens[sequence_start])
+    affected_mention_id = None
+    if affected_mention:
+        # make sure we affect parts of entities (but no non-entity text),
+        # or the whole entity, but never parts of the entity and non-entity text
+        replaced_text = " ".join(
+            [doc.tokens[i].text for i in range(sequence_start, sequence_end)]
+        )
+        replacement_text = " ".join(replacement)
+        assert min(affected_mention.token_document_indices) <= sequence_start, (
+            f"Trying to replace '{replaced_text}' ({sequence_start}-{sequence_end}) "
+            f"with '{replacement_text}', but sequence start ({sequence_start}) is "
+            f"smaller than the affected mention with text '{affected_mention.text(doc)}' "
+            f"(tokens {affected_mention.token_document_indices})"
+        )
+        assert max(affected_mention.token_document_indices) >= sequence_end - 1, (
+            f"Trying to replace '{replaced_text}' ({sequence_start}-{sequence_end}) "
+            f"with '{replacement_text}', but sequence end ({sequence_end}) is bigger "
+            f"than the affected mention with text '{affected_mention.text(doc)}' "
+            f"(tokens {affected_mention.token_document_indices})"
+        )
+        affected_mention_id = doc.mentions.index(affected_mention)
+
     old_sequence_length = sequence_end - sequence_start
     new_sequence_length = len(replacement)
     replacement_tokens = text_to_tokens(doc, replacement, sequence_start)
@@ -273,7 +314,10 @@ def replace_sequence_inplace(
         for i, replacement_token in enumerate(replacement_tokens[:old_sequence_length]):
             doc.tokens[sequence_start + i] = replacement_token
         insert_tokens_inplace(
-            doc, replacement_tokens[old_sequence_length:], sequence_end
+            doc,
+            replacement_tokens[old_sequence_length:],
+            sequence_end,
+            expand_mention_id=affected_mention_id,
         )
 
 

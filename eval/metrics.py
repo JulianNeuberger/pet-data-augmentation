@@ -85,7 +85,7 @@ def mentions_f1_stats(
     *,
     predicted_documents: typing.List[data.PetDocument],
     ground_truth_documents: typing.List[data.PetDocument],
-    print_only_tags: typing.Optional[typing.List[str]],
+    print_only_tags: typing.Optional[typing.List[str]] = None,
     verbose: bool = False,
 ) -> typing.Dict[str, Stats]:
     return _f1_stats(
@@ -175,7 +175,7 @@ def _f1_stats(
     predicted_documents: typing.List[data.DocumentBase],
     ground_truth_documents: typing.List[data.DocumentBase],
     attribute: str,
-    print_only_tags: typing.Optional[typing.List[str]],
+    print_only_tags: typing.Optional[typing.List[str]] = None,
     verbose: bool = False,
 ) -> typing.Dict[str, Stats]:
     assert attribute in ["mentions", "relations", "entities", "constraints"]
@@ -257,7 +257,7 @@ def print_sets(
     document: data.DocumentBase,
     sets: typing.Dict[str, typing.List[data.SupportsPrettyDump]],
     get_tag: typing.Callable[[typing.Any], str],
-    print_only_tags: typing.Optional[typing.List[str]],
+    print_only_tags: typing.Optional[typing.List[str]] = None,
 ):
     print(f"=== {document.id} " + "=" * 150)
     print(document.text)

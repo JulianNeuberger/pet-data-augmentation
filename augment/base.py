@@ -50,7 +50,9 @@ class AugmentationStep(abc.ABC):
         tagged_sequences = []
 
         cur_sequence = [doc.tokens[0]]
-        last_mention: typing.Optional[PetMention] = None
+        last_mention: typing.Optional[PetMention] = doc.get_mention_for_token(
+            doc.tokens[0]
+        )
         for token in doc.tokens[1:]:
             cur_mention = doc.get_mention_for_token(token)
 
@@ -165,9 +167,13 @@ class BaseTokenReplacementStep(AugmentationStep, abc.ABC):
                     replacements = candidate_replacements[candidate]["all"]
                     is_unused = False
 
-                replacement = random.choice(replacements)
+                replacement: typing.List[str] = random.choice(replacements)
                 if is_unused:
                     replacements.remove(replacement)
+
+                assert (
+                    len(replacement) > 0
+                ), "Zero length replacement, should be filtered."
 
                 mutate.replace_sequence_inplace(
                     augmented_doc,

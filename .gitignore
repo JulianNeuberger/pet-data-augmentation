@@ -260,3 +260,5 @@ graphs/
 experiments.bkp.pkl
 
 jsonl/
+
+res/runs/

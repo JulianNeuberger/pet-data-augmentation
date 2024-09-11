@@ -26,7 +26,7 @@ class MergeDocumentsStep(base.AugmentationStep):
             augmented_doc = doc.copy(clear=[])
             other = random.choice(dataset)
             dataset.remove(other)
-            augmented_doc.merge(other)
+            augmented_doc = augmented_doc.merge(other)
             augmented.append(augmented_doc)
 
         return augmented

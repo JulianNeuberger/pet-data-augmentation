@@ -1,16 +1,14 @@
 import inspect
 import typing
 
-from augment.augmenter import Augmenter, run_augmentation
-
-from augment.base import AugmentationStep
-
 from augment.abbreviate import (
     ContractionsAndExpansionsPerturbation,
     InsertAbbreviations,
     ReplaceAbbreviationsAndAcronyms,
 )
 from augment.antonyms import EvenAntonymsSubstitute, AntonymInversionStep
+from augment.augmenter import Augmenter, run_augmentation
+from augment.base import AugmentationStep
 from augment.deletion import RandomDeletion
 from augment.inserting import RandomInsert, FillerWordAugmentation
 from augment.masking import (
@@ -25,6 +23,11 @@ from augment.reordering import (
     SentenceReordering,
     RandomTokenSwap,
     ShuffleWithinSegments,
+)
+from augment.repeat import (
+    InverseMentionTypeFrequencySampler,
+    InverseRelationTypeFrequencySampler,
+    UniformRepeat,
 )
 from augment.sampling import TagSubsequenceSubstitution, EntityMentionReplacement
 from augment.synonyms import SynonymInsertion, SynonymSubstitution

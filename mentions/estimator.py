@@ -41,10 +41,6 @@ class ConditionalRandomFieldsEstimator:
             assert len(X_train) == len(y_train)
             assert all([len(xs) == len(ys) for xs, ys in zip(X_train, y_train)])
 
-            print(X_train)
-            print(y_train)
-            print(list(zip(X_train, y_train)))
-
             for xseq, yseq in zip(X_train, y_train):
                 trainer.append(xseq, yseq)
 

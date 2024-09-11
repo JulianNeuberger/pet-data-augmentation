@@ -66,7 +66,12 @@ class BackTranslation(base.BaseTokenReplacementStep):
 
         translated_batch = self.back_translate(text, num_replacements_per_candidate)
         translated_batch = [t for t in translated_batch if t.lower() != text.lower()]
-        return [tokenize.word_tokenize(t) for t in translated_batch]
+        translated_batch = [t for t in translated_batch if len(t) > 0]
+        tokenized = [tokenize.word_tokenize(t) for t in translated_batch]
+        zero_length = [t for t in tokenized if len(t) == 0]
+        if len(zero_length) > 0:
+            print(f"zero length in {tokenized} from {translated_batch}")
+        return tokenized
 
     def back_translate(self, en: str, num_translations: int) -> typing.List[str]:
         try:

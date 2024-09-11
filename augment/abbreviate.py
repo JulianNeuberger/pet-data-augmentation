@@ -57,6 +57,13 @@ class BaseAbbreviationStep(BaseTokenReplacementStep, abc.ABC):
         candidates = []
         candidate: typing.List[PetToken] = []
         for token in doc.tokens:
+            if len(candidate) > 0:
+                candidate_mention = doc.get_mention_for_token(candidate[-1])
+                current_mention = doc.get_mention_for_token(token)
+                if candidate_mention != current_mention:
+                    # new mention will start here, not a valid candidate
+                    candidate = [token]
+                    continue
             candidate += [token]
             candidate_key = " ".join(t.text for t in candidate)
             if candidate_key in dictionary:
