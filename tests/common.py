@@ -1,7 +1,3 @@
-import inspect
-import typing
-
-from augment import base
 from data import PetDocument, PetToken, PetRelation, PetEntity, PetMention
 
 
