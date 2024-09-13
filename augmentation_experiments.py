@@ -16,12 +16,14 @@ import pipeline
 from augment import params
 from data import PetDocument
 
-# strategies: typing.List[typing.Type[augment.AugmentationStep]] = (
-#     augment.collect_all_augmentations(augment.base.AugmentationStep)
-# )
-strategies: typing.List[typing.Type[augment.AugmentationStep]] = [
-    augment.BackTranslation
-]
+strategies: typing.List[typing.Type[augment.AugmentationStep]] = (
+    augment.collect_all_augmentations(augment.base.AugmentationStep)
+)
+# strategies: typing.List[typing.Type[augment.AugmentationStep]] = [
+#     # augment.LargeLanguageModelRephrasing
+#     augment.UniformRepeat,
+#     augment.InverseMentionTypeFrequencySampler,
+# ]
 # randomize the order in which the strategies are tested, should improve parallelization...
 random.shuffle(strategies)
 

@@ -11,6 +11,7 @@ from augment.augmenter import Augmenter, run_augmentation
 from augment.base import AugmentationStep
 from augment.deletion import RandomDeletion
 from augment.inserting import RandomInsert, FillerWordAugmentation
+from augment.llm import LargeLanguageModelRephrasing
 from augment.masking import (
     TransformerFill,
     HyponymReplacement,

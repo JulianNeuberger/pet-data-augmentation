@@ -18,7 +18,9 @@ all_documents = data.pet.NewPetFormatImporter(str(data_path)).do_import()
 # strategies: typing.List[typing.Type[augment.AugmentationStep]] = (
 #     augment.collect_all_augmentations(augment.base.AugmentationStep)
 # )
-strategies: typing.List[typing.Type[augment.AugmentationStep]] = [augment.RandomInsert]
+strategies: typing.List[typing.Type[augment.AugmentationStep]] = [
+    augment.BackTranslation
+]
 
 examples_path = (pathlib.Path(__file__).parent / "res" / "examples").resolve()
 os.makedirs(examples_path, exist_ok=True)

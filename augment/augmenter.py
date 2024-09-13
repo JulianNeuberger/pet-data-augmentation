@@ -75,6 +75,8 @@ def run_augmentation(
 
     for i, document in tqdm.tqdm(enumerate(dataset), total=len(dataset)):
         current_aug_rate = augmentation_rate_per_document[i]
+        if current_aug_rate == 0:
+            continue
         # apply first step with the actual augmentation rate
         augmented_docs = steps[0].do_augment(document, current_aug_rate)
 

@@ -13,6 +13,7 @@ def insert_tokens_inplace(
 ) -> None:
     if expand_mention_id is not None:
         expanded_mention = doc.mentions[expand_mention_id]
+        print(f"Expanding mention {expand_mention_id} (\"{expanded_mention.text(doc)}\")")
         assert (
             min(expanded_mention.token_document_indices)
             <= index_in_document
@@ -33,7 +34,7 @@ def insert_tokens_inplace(
         # will be true, if the inserted sequence is inside a mention
         expanded = (
             min(m.token_document_indices)
-            <= index_in_document
+            < index_in_document
             <= max(m.token_document_indices)
         )
         for token_id in m.token_document_indices:
@@ -42,12 +43,14 @@ def insert_tokens_inplace(
             else:
                 affected = True
                 new_token_ids.append(token_id + len(tokens))
-        if affected:
-            if expanded or m_id == expanded:
+        if affected or m_id == expand_mention_id:
+            if expanded or m_id == expand_mention_id:
                 # inserted tokens into a mention!
-                new_token_ids += list(
+                expanded_token_ids = list(
                     range(index_in_document, index_in_document + len(tokens))
                 )
+                print(f"Expanding token ids {new_token_ids} by {expanded_token_ids}")
+                new_token_ids += expanded_token_ids
                 new_token_ids = sorted(new_token_ids)
             assert len(new_token_ids) != 0
             doc.mentions[m_id] = PetMention(

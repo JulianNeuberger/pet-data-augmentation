@@ -111,6 +111,10 @@ class BaseTokenReplacementStep(AugmentationStep, abc.ABC):
         candidates: typing.List[typing.List[PetToken]],
         num_augments: int,
     ) -> typing.List[PetDocument]:
+        print()
+        print()
+        print(f"------ {doc.name} -------------------------------------------")
+
         num_annotations_before = (
             len(doc.mentions),
             len(doc.entities),
@@ -121,68 +125,51 @@ class BaseTokenReplacementStep(AugmentationStep, abc.ABC):
             print(
                 f'Replacement strategy "{self.__class__.__name__}" did not find any candidates!'
             )
-        candidate_replacements: typing.Dict[
-            typing.Tuple[PetToken, ...], typing.Dict[str, typing.List[typing.List[str]]]
-        ] = {}
-        for candidate in candidates:
-            replacement_texts = self.get_replacements(candidate, 5, doc)
-            # remove identical replacements
-            replacement_texts = [
-                t
-                for t in replacement_texts
-                if " ".join(c.text for c in candidate) != " ".join(r for r in t)
-            ]
-            if len(replacement_texts) == 0:
-                print(
-                    f'Replacement strategy "{self.__class__.__name__}" did not generate any '
-                    f"replacement texts for candidate \"{' '.join(t.text for t in candidate)}\"!"
-                )
-                continue
 
-            candidate_replacements[tuple(candidate)] = {
-                "unused": replacement_texts,
-                "all": list(replacement_texts),
-            }
+        random.shuffle(candidates)
+
+        candidate_replacements = {}
+        replacement_plans: typing.List[
+            typing.List[typing.Tuple[typing.List[PetToken], typing.List[str]]]
+        ] = []
+        for i in range(num_augments):
+            print(f"-- {i} ---------------")
+            replacement_plans.append([])
+            cur_num_augments = 0
+            for candidate in candidates:
+                if not self.should_replace(candidate, cur_num_augments):
+                    continue
+                candidate_text = " ".join(t.text for t in candidate)
+                if candidate_text not in candidate_replacements:
+                    replacements = self.get_replacements(candidate, 5, doc)
+                    candidate_replacements[candidate_text] = replacements
+                if len(candidate_replacements[candidate_text]) == 0:
+                    continue
+                replacement = random.choice(candidate_replacements[candidate_text])
+                replacement_plans[-1].append((candidate, replacement))
+                cur_num_augments += 1
 
         augmented_docs = []
-        for _ in range(num_augments):
+        for plan in replacement_plans:
             changed = False
             augmented_doc = doc.copy(clear=[])
-            candidates = list(candidate_replacements.keys())
-            candidates = [
-                c for i, c in enumerate(candidates) if self.should_replace(list(c), i)
-            ]
-            candidates = sorted(
-                candidates,
-                key=lambda c: min(t.index_in_document for t in c),
+
+            plan = sorted(
+                plan,
+                key=lambda x: min(t.index_in_document for t in x[0]),
                 reverse=True,
             )
 
-            num_replacements = 0
-            for candidate in candidates:
-                # try to pick an unused replacement and fall back to used ones
-                replacements = candidate_replacements[candidate]["unused"]
-                is_unused = True
-                if len(replacements) == 0:
-                    replacements = candidate_replacements[candidate]["all"]
-                    is_unused = False
-
-                replacement: typing.List[str] = random.choice(replacements)
-                if is_unused:
-                    replacements.remove(replacement)
-
-                assert (
-                    len(replacement) > 0
-                ), "Zero length replacement, should be filtered."
-
+            for c, r in plan:
                 mutate.replace_sequence_inplace(
                     augmented_doc,
-                    candidate[0].index_in_document,
-                    candidate[-1].index_in_document + 1,
-                    replacement,
+                    c[0].index_in_document,
+                    c[-1].index_in_document + 1,
+                    r,
                 )
-                num_replacements += 1
                 changed = True
+                print(f"replace \"{[t.text for t in c]}\" with \"{r}\"")
+
             num_annotations_after = (
                 len(augmented_doc.mentions),
                 len(augmented_doc.entities),
@@ -193,8 +180,85 @@ class BaseTokenReplacementStep(AugmentationStep, abc.ABC):
                 f"This must not happen! Before augmentation there were {num_annotations_before} "
                 f"mentions, entities and relations, now there are {num_annotations_after}."
             )
+
             if changed:
                 augmented_docs.append(augmented_doc)
+
+        # # candidate_replacements: typing.Dict[
+        # #     typing.Tuple[PetToken, ...], typing.Dict[str, typing.List[typing.List[str]]]
+        # # ] = {}
+        # for candidate in candidates:
+        #     replacement_texts = self.get_replacements(candidate, 5, doc)
+        #     # remove identical replacements
+        #     replacement_texts = [
+        #         t
+        #         for t in replacement_texts
+        #         if " ".join(c.text for c in candidate) != " ".join(r for r in t)
+        #     ]
+        #     replacement_texts = [t for t in replacement_texts if len(t) > 0]
+        #     if len(replacement_texts) == 0:
+        #         print(
+        #             f'Replacement strategy "{self.__class__.__name__}" did not generate any '
+        #             f"replacement texts for candidate \"{' '.join(t.text for t in candidate)}\"!"
+        #         )
+        #         continue
+        #
+        #     candidate_replacements[tuple(candidate)] = {
+        #         "unused": replacement_texts,
+        #         "all": list(replacement_texts),
+        #     }
+        #
+        # augmented_docs = []
+        # for _ in range(num_augments):
+        #     changed = False
+        #     augmented_doc = doc.copy(clear=[])
+        #     candidates = list(candidate_replacements.keys())
+        #     candidates = [
+        #         c for i, c in enumerate(candidates) if self.should_replace(list(c), i)
+        #     ]
+        #     candidates = sorted(
+        #         candidates,
+        #         key=lambda c: min(t.index_in_document for t in c),
+        #         reverse=True,
+        #     )
+        #
+        #     num_replacements = 0
+        #     for candidate in candidates:
+        #         # try to pick an unused replacement and fall back to used ones
+        #         replacements = candidate_replacements[candidate]["unused"]
+        #         is_unused = True
+        #         if len(replacements) == 0:
+        #             replacements = candidate_replacements[candidate]["all"]
+        #             is_unused = False
+        #
+        #         replacement: typing.List[str] = random.choice(replacements)
+        #         if is_unused:
+        #             replacements.remove(replacement)
+        #
+        #         if len(replacement) == 0:
+        #             print("Zero length replacement, should be filtered.")
+        #             continue
+        #
+        #         mutate.replace_sequence_inplace(
+        #             augmented_doc,
+        #             candidate[0].index_in_document,
+        #             candidate[-1].index_in_document + 1,
+        #             replacement,
+        #         )
+        #         num_replacements += 1
+        #         changed = True
+        #     num_annotations_after = (
+        #         len(augmented_doc.mentions),
+        #         len(augmented_doc.entities),
+        #         len(augmented_doc.relations),
+        #     )
+        #     assert num_annotations_before == num_annotations_after, (
+        #         f"Replacing candidates changed the documents annotations! "
+        #         f"This must not happen! Before augmentation there were {num_annotations_before} "
+        #         f"mentions, entities and relations, now there are {num_annotations_after}."
+        #     )
+        #     if changed:
+        #         augmented_docs.append(augmented_doc)
 
         return augmented_docs
 
