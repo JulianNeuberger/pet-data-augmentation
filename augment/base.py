@@ -111,10 +111,6 @@ class BaseTokenReplacementStep(AugmentationStep, abc.ABC):
         candidates: typing.List[typing.List[PetToken]],
         num_augments: int,
     ) -> typing.List[PetDocument]:
-        print()
-        print()
-        print(f"------ {doc.name} -------------------------------------------")
-
         num_annotations_before = (
             len(doc.mentions),
             len(doc.entities),
@@ -133,7 +129,6 @@ class BaseTokenReplacementStep(AugmentationStep, abc.ABC):
             typing.List[typing.Tuple[typing.List[PetToken], typing.List[str]]]
         ] = []
         for i in range(num_augments):
-            print(f"-- {i} ---------------")
             replacement_plans.append([])
             cur_num_augments = 0
             for candidate in candidates:
@@ -168,7 +163,6 @@ class BaseTokenReplacementStep(AugmentationStep, abc.ABC):
                     r,
                 )
                 changed = True
-                print(f"replace \"{[t.text for t in c]}\" with \"{r}\"")
 
             num_annotations_after = (
                 len(augmented_doc.mentions),

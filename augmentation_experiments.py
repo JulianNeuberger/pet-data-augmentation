@@ -215,6 +215,7 @@ def main():
             un_augmented_f1,
             **kwargs,
         )
+        print("Creating study...")
         study = optuna.create_study(
             direction="maximize",
             load_if_exists=True,
