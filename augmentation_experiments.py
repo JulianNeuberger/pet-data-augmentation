@@ -152,15 +152,15 @@ def main():
     )
     fold_indices = list(kf.split(all_documents))
 
-    pipeline_step_class = pipeline.CrfMentionEstimatorStep
-    kwargs = {}
+    # pipeline_step_class = pipeline.CrfMentionEstimatorStep
+    # kwargs = {}
 
-    # pipeline_step_class = pipeline.CatBoostRelationExtractionStep
-    # kwargs = {
-    #     "num_trees": 100,
-    #     "device": device,
-    #     "device_ids": device_ids,
-    # }
+    pipeline_step_class = pipeline.CatBoostRelationExtractionStep
+    kwargs = {
+        "num_trees": 100,
+        "device": device,
+        "device_ids": device_ids,
+    }
 
     train_folds: typing.List[typing.List[PetDocument]] = []
     test_folds: typing.List[typing.List[PetDocument]] = []
