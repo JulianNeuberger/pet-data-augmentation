@@ -17,6 +17,12 @@ class RandomDeletion(base.AugmentationStep):
         self.p = p
 
     @staticmethod
+    def get_default_configuration(
+        dataset: typing.List[PetDocument],
+    ) -> "RandomDeletion":
+        return RandomDeletion(dataset, p=0.12)
+
+    @staticmethod
     def get_params() -> typing.List[typing.Union[params.Param]]:
         return [
             params.FloatParam(name="p", min_value=0.0, max_value=1.0),

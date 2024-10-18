@@ -10,6 +10,12 @@ class MergeDocumentsStep(base.AugmentationStep):
     def get_params() -> typing.List[typing.Union[params.Param]]:
         return []
 
+    @staticmethod
+    def get_default_configuration(
+        dataset: typing.List[PetDocument],
+    ) -> "MergeDocumentsStep":
+        return MergeDocumentsStep(dataset)
+
     def do_augment(
         self, doc: PetDocument, num_augments: int
     ) -> typing.List[PetDocument]:

@@ -65,6 +65,18 @@ class FillerWordAugmentation(base.AugmentationStep):
         self.insert_filler_phrases = insert_filler_phrases
 
     @staticmethod
+    def get_default_configuration(
+        dataset: typing.List[PetDocument],
+    ) -> "FillerWordAugmentation":
+        return FillerWordAugmentation(
+            dataset,
+            insert_probability=0.06,
+            insert_speaker_phrases=True,
+            insert_uncertainty_phrases=False,
+            insert_filler_phrases=False,
+        )
+
+    @staticmethod
     def get_params() -> typing.List[typing.Union[params.Param]]:
         return [
             params.BooleanParameter(name="insert_speaker_phrases"),
@@ -112,6 +124,10 @@ class RandomInsert(base.AugmentationStep):
             for token in document.tokens:
                 vocab.add(token.text)
         self.vocab = list(vocab)
+
+    @staticmethod
+    def get_default_configuration(dataset: typing.List[PetDocument]) -> "RandomInsert":
+        return RandomInsert(dataset, insertion_probability=0.02)
 
     @staticmethod
     def get_params() -> typing.List[typing.Union[params.Param]]:

@@ -18,12 +18,15 @@ class PipelineStepResult:
     stats: typing.Dict[str, metrics.Stats]
 
 
-class PipelineStep(abc.ABC):
+T = typing.TypeVar("T")
+
+
+class PipelineStep(abc.ABC, typing.Generic[T]):
     def __init__(self, name: str, **kwargs):
         self._name = name
 
     @property
-    def name(self):
+    def name(self) -> str:
         return self._name
 
     def __hash__(self):
@@ -43,14 +46,15 @@ class PipelineStep(abc.ABC):
     ):
         train_data = [d.copy(clear=[]) for d in train_documents]
         test_data = [d.copy(clear=[]) for d in test_documents]
-        result = self._run(train_documents=train_data, test_documents=test_data)
+        estimator = self.train(train_data)
+        result = self.predict(test_data, estimator)
         print("Running evaluation...")
         start = time.time_ns()
-        stats = self._eval(ground_truth=ground_truth_documents, predictions=result)
+        stats = self.eval(ground_truth=ground_truth_documents, predictions=result)
         print(f"Evaluation done after {(time.time_ns() - start) / 1e6:.1f}ms!")
         return PipelineStepResult(result, stats)
 
-    def _eval(
+    def eval(
         self,
         *,
         predictions: typing.List[PetDocument],
@@ -58,11 +62,12 @@ class PipelineStep(abc.ABC):
     ) -> typing.Dict[str, metrics.Stats]:
         raise NotImplementedError()
 
-    def _run(
-        self,
-        *,
-        train_documents: typing.List[PetDocument],
-        test_documents: typing.List[PetDocument],
+    def train(self, train_documents: typing.List[PetDocument]) -> T:
+        raise NotImplementedError()
+
+    @staticmethod
+    def predict(
+        test_documents: typing.List[PetDocument], estimator: T
     ) -> typing.List[PetDocument]:
         raise NotImplementedError()
 
@@ -101,7 +106,7 @@ class CatBoostRelationExtractionStep(PipelineStep):
         self._device = device
         self._device_ids = device_ids
 
-    def _eval(
+    def eval(
         self,
         *,
         predictions: typing.List[PetDocument],
@@ -114,12 +119,9 @@ class CatBoostRelationExtractionStep(PipelineStep):
             verbose=self._verbose,
         )
 
-    def _run(
-        self,
-        *,
-        train_documents: typing.List[PetDocument],
-        test_documents: typing.List[PetDocument],
-    ) -> typing.List[PetDocument]:
+    def train(
+        self, train_documents: typing.List[PetDocument]
+    ) -> relations.CatBoostRelationEstimator:
         ner_tags = [
             "Activity",
             "Actor",
@@ -173,71 +175,19 @@ class CatBoostRelationExtractionStep(PipelineStep):
             device_ids=self._device_ids,
         )
         estimator.train(train_documents)
-        test_documents = [d.copy(clear=["relations"]) for d in test_documents]
-        return estimator.predict(test_documents)
+        return estimator
 
-
-class NeuralRelationExtraction(PipelineStep):
-    def __init__(
-        self,
-        name: str,
-        negative_sampling_rate: float,
-        verbose: bool = False,
-        seed: int = 42,
-    ):
-        super().__init__(name)
-        self._negative_sampling = negative_sampling_rate
-        self._verbose = verbose
-        self._seed = seed
-
-    def _eval(
-        self,
-        *,
-        predictions: typing.List[PetDocument],
-        ground_truth: typing.List[PetDocument],
-    ) -> typing.Dict[str, metrics.Stats]:
-        return metrics.relation_f1_stats(
-            predicted_documents=predictions,
-            ground_truth_documents=ground_truth,
-            print_only_tags=None,
-            verbose=self._verbose,
-        )
-
-    def _run(
-        self,
-        *,
-        train_documents: typing.List[PetDocument],
+    @staticmethod
+    def predict(
         test_documents: typing.List[PetDocument],
+        estimator: relations.CatBoostRelationEstimator,
     ) -> typing.List[PetDocument]:
-        ner_tags = [
-            "Activity",
-            "Actor",
-            "Activity Data",
-            "Condition Specification",
-            "Further Specification",
-            "AND Gateway",
-            "XOR Gateway",
-        ]
-        relation_tags = [
-            "Flow",
-            "Uses",
-            "Actor Performer",
-            "Actor Recipient",
-            "Further Specification",
-            "Same Gateway",
-        ]
-        estimator = relations.NeuralRelationEstimator(
-            checkpoint="allenai/longformer-base-4096",
-            entity_tags=ner_tags,
-            relation_tags=relation_tags,
-        )
-        estimator.train(train_documents)
         test_documents = [d.copy(clear=["relations"]) for d in test_documents]
         return estimator.predict(test_documents)
 
 
 class RuleBasedRelationExtraction(PipelineStep):
-    def _eval(
+    def eval(
         self,
         *,
         predictions: typing.List[PetDocument],
@@ -249,12 +199,9 @@ class RuleBasedRelationExtraction(PipelineStep):
             print_only_tags=None,
         )
 
-    def _run(
-        self,
-        *,
-        train_documents: typing.List[PetDocument],
-        test_documents: typing.List[PetDocument],
-    ) -> typing.List[PetDocument]:
+    def train(
+        self, train_documents: typing.List[PetDocument]
+    ) -> relations.RuleBasedRelationEstimator:
         activity = "Activity"
         actor = "Actor"
         activity_data = "Activity Data"
@@ -304,12 +251,20 @@ class RuleBasedRelationExtraction(PipelineStep):
                 ),
             ]
         )
+        return extractor
+
+    @staticmethod
+    def predict(
+        test_documents: typing.List[PetDocument],
+        estimator: relations.RuleBasedRelationEstimator,
+    ) -> typing.List[PetDocument]:
         test_documents = [d.copy(clear=["relations"]) for d in test_documents]
-        return extractor.predict(test_documents)
+        return estimator.predict(test_documents)
 
 
 class CrfMentionEstimatorStep(PipelineStep):
-    def _eval(
+
+    def eval(
         self,
         *,
         predictions: typing.List[PetDocument],
@@ -321,17 +276,21 @@ class CrfMentionEstimatorStep(PipelineStep):
             print_only_tags=None,
         )
 
-    def _run(
-        self,
-        *,
-        train_documents: typing.List[PetDocument],
-        test_documents: typing.List[PetDocument],
-    ) -> typing.List[PetDocument]:
+    def train(
+        self, train_documents: typing.List[PetDocument]
+    ) -> mentions.ConditionalRandomFieldsEstimator:
         estimator = mentions.ConditionalRandomFieldsEstimator(
             pathlib.Path(f"models/crf/{self._name}")
         )
         estimator.train(train_documents)
-        mention_extraction_input = [d.copy(clear=["mentions"]) for d in test_documents]
+        return estimator
+
+    @staticmethod
+    def predict(
+        documents: typing.List[PetDocument],
+        estimator: mentions.ConditionalRandomFieldsEstimator,
+    ) -> typing.List[PetDocument]:
+        mention_extraction_input = [d.copy(clear=["mentions"]) for d in documents]
         return estimator.predict(mention_extraction_input)
 
 
@@ -350,7 +309,7 @@ class NeuralCoReferenceResolutionStep(PipelineStep):
         self._mention_overlap = mention_overlap
         self._cluster_overlap = cluster_overlap
 
-    def _eval(
+    def eval(
         self,
         *,
         predictions: typing.List[PetDocument],
@@ -364,20 +323,23 @@ class NeuralCoReferenceResolutionStep(PipelineStep):
             ground_truth_documents=ground_truth,
         )
 
-    def _run(
-        self,
-        *,
-        train_documents: typing.List[PetDocument],
-        test_documents: typing.List[PetDocument],
-    ) -> typing.List[PetDocument]:
-        test_documents = [d.copy(clear=["entities"]) for d in test_documents]
+    def train(
+        self, train_documents: typing.List[PetDocument]
+    ) -> coref.NeuralCoRefSolver:
         solver = coref.NeuralCoRefSolver(
             self._resolved_tags,
             ner_tag_strategy=self._ner_strategy,
             min_mention_overlap=self._mention_overlap,
             min_cluster_overlap=self._cluster_overlap,
         )
-        return solver.resolve_co_references(test_documents)
+        return solver
+
+    @staticmethod
+    def predict(
+        test_documents: typing.List[PetDocument], estimator: coref.NeuralCoRefSolver
+    ) -> typing.List[PetDocument]:
+        test_documents = [d.copy(clear=["entities"]) for d in test_documents]
+        return estimator.resolve_co_references(test_documents)
 
 
 class NaiveCoReferenceResolutionStep(PipelineStep):
@@ -388,7 +350,7 @@ class NaiveCoReferenceResolutionStep(PipelineStep):
         self._resolved_tags = resolved_tags
         self._mention_overlap = mention_overlap
 
-    def _eval(
+    def eval(
         self,
         *,
         predictions: typing.List[PetDocument],
@@ -402,14 +364,17 @@ class NaiveCoReferenceResolutionStep(PipelineStep):
             ground_truth_documents=ground_truth,
         )
 
-    def _run(
-        self,
-        *,
-        train_documents: typing.List[PetDocument],
-        test_documents: typing.List[PetDocument],
-    ) -> typing.List[PetDocument]:
-        test_documents = [d.copy(clear=["entities"]) for d in test_documents]
+    def train(
+        self, train_documents: typing.List[PetDocument]
+    ) -> coref.NaiveCoRefSolver:
         solver = coref.NaiveCoRefSolver(
             self._resolved_tags, min_mention_overlap=self._mention_overlap
         )
-        return solver.resolve_co_references(test_documents)
+        return solver
+
+    @staticmethod
+    def predict(
+        test_documents: typing.List[PetDocument], estimator: coref.NaiveCoRefSolver
+    ) -> typing.List[PetDocument]:
+        test_documents = [d.copy(clear=["entities"]) for d in test_documents]
+        return estimator.resolve_co_references(test_documents)

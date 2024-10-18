@@ -68,15 +68,21 @@ def run_augmentation(
         f"Augmenting {len(dataset)} documents with "
         f"augmentation factor of {augmentation_rate:.4f} "
         f"resulting in {expected_new_documents} new documents "
-        f"using strategies {[type(s).__name__ for s in steps]}..."
+        f"using strategies {[type(s).__name__ for s in steps]}...",
+        flush=True,
     )
 
     augmented_dataset: typing.List[PetDocument] = []
 
-    for i, document in tqdm.tqdm(enumerate(dataset), total=len(dataset)):
+    for i, document in tqdm.tqdm(
+        enumerate(dataset),
+        total=len(dataset),
+        desc=f"augmentation with {len(steps)} steps",
+    ):
         current_aug_rate = augmentation_rate_per_document[i]
         if current_aug_rate == 0:
             continue
+
         # apply first step with the actual augmentation rate
         augmented_docs = steps[0].do_augment(document, current_aug_rate)
 
@@ -84,8 +90,18 @@ def run_augmentation(
         # but only create one augmented document
         for augmented_doc in augmented_docs:
             for step in steps[1:]:
-                augmented_doc = step.do_augment(augmented_doc, 1)
+                print(f"Running {type(step).__name__} ...")
+                augmentation_result = step.do_augment(augmented_doc, 1)
+                if len(augmentation_result) > 0:
+                    augmented_doc = augmentation_result[0]
+                else:
+                    print(
+                        f"Step {step.__class__.__name__} in augmentation pipeline did not yield any result"
+                    )
             augmented_dataset.append(augmented_doc)
+
+    if len(augmented_dataset) == 0:
+        return [d.copy(clear=[]) for d in dataset]
 
     # pad dataset if augmentation strategy could not generate enough new samples
     if len(augmented_dataset) < expected_new_documents:

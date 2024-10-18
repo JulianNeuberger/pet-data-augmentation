@@ -18,6 +18,12 @@ class AuxiliaryNegationRemoval(base.AugmentationStep):
         self.nlp = spacy.load("en_core_web_sm")
 
     @staticmethod
+    def get_default_configuration(
+        dataset: typing.List[PetDocument],
+    ) -> "AuxiliaryNegationRemoval":
+        return AuxiliaryNegationRemoval(dataset)
+
+    @staticmethod
     def get_params() -> typing.List[typing.Union[params.Param]]:
         return []
 

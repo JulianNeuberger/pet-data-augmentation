@@ -13,6 +13,12 @@ class ShuffleWithinSegments(base.BaseTokenReplacementStep):
     https://github.com/GEM-benchmark/NL-Augmenter/tree/main/nlaugmenter/transformations/shuffle_within_segments
     """
 
+    @staticmethod
+    def get_default_configuration(
+        dataset: typing.List[PetDocument],
+    ) -> "ShuffleWithinSegments":
+        return ShuffleWithinSegments(dataset, replace_probability=0.46)
+
     def get_replacement_candidates(
         self, doc: PetDocument
     ) -> typing.List[typing.List[PetToken]]:
@@ -45,6 +51,12 @@ class ShuffleWithinSegments(base.BaseTokenReplacementStep):
 
 
 class SentenceReordering(base.AugmentationStep):
+    @staticmethod
+    def get_default_configuration(
+        dataset: typing.List[PetDocument],
+    ) -> "SentenceReordering":
+        return SentenceReordering(dataset)
+
     def do_augment(
         self, doc: PetDocument, num_augments: int
     ) -> typing.List[PetDocument]:
@@ -72,6 +84,12 @@ class RandomTokenSwap(base.AugmentationStep):
     ):
         super().__init__(dataset, **kwargs)
         self.p = swap_probability
+
+    @staticmethod
+    def get_default_configuration(
+        dataset: typing.List[PetDocument],
+    ) -> "RandomTokenSwap":
+        return RandomTokenSwap(dataset, swap_probability=0.01)
 
     def do_augment(
         self, doc: PetDocument, num_augments: int

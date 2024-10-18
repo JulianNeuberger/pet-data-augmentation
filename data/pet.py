@@ -271,7 +271,7 @@ class PetToken:
         )
 
 
-class PetJsonExporter:
+class PetJsonLinesExporter:
     def __init__(self, path: str):
         self._dict_exporter = PetDictExporter()
         self._path = path
@@ -611,5 +611,5 @@ class NewPetFormatImporter(base.BaseImporter[PetDocument]):
 
 if __name__ == "__main__":
     documents = OldPetFormatImporter("res/data/pet/all.jsonl").do_import()
-    PetJsonExporter("res/data/pet/all.new.jsonl").export(documents)
+    PetJsonLinesExporter("res/data/pet/all.new.jsonl").export(documents)
     documents = NewPetFormatImporter("res/data/pet/all.new.jsonl").do_import()

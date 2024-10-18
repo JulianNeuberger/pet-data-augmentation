@@ -18,6 +18,15 @@ class EntityMentionReplacement(base.BaseTokenReplacementStep):
     ):
         super().__init__(dataset, replace_probability, **kwargs)
 
+    @staticmethod
+    def get_default_configuration(
+        dataset: typing.List[PetDocument],
+    ) -> "EntityMentionReplacement":
+        return EntityMentionReplacement(
+            dataset=dataset,
+            replace_probability=0.11,
+        )
+
     def get_replacement_candidates(
         self, doc: PetDocument
     ) -> typing.List[typing.List[PetToken]]:
@@ -91,6 +100,14 @@ class TagSubsequenceSubstitution(base.BaseTokenReplacementStep):
                         self.text_by_pos[pos].append(text)
         print(
             f"Preprocessing dataset for B.103 took {(time.time_ns() - start_time) / 1e9:.4f}s"
+        )
+
+    @staticmethod
+    def get_default_configuration(
+        dataset: typing.List[PetDocument],
+    ) -> "TagSubsequenceSubstitution":
+        return TagSubsequenceSubstitution(
+            dataset, min_n_gram=1, max_n_gram=5, replace_probability=0.99
         )
 
     @staticmethod

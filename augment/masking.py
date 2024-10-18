@@ -82,6 +82,12 @@ class HyponymReplacement(base.BaseTokenReplacementStep):
         super().__init__(dataset, replace_probability=replace_probability)
         self.editor = Editor()
 
+    @staticmethod
+    def get_default_configuration(
+        dataset: typing.List[PetDocument],
+    ) -> "HyponymReplacement":
+        return HyponymReplacement(dataset, replace_probability=0.47)
+
     def get_replacement_candidates(
         self, doc: PetDocument
     ) -> typing.List[typing.List[PetToken]]:
@@ -127,6 +133,12 @@ class HypernymReplacement(base.BaseTokenReplacementStep):
     def __init__(self, dataset: typing.List[PetDocument], replace_probability: float):
         super().__init__(dataset, replace_probability=replace_probability)
         self.editor = Editor()
+
+    @staticmethod
+    def get_default_configuration(
+        dataset: typing.List[PetDocument],
+    ) -> "HypernymReplacement":
+        return HypernymReplacement(dataset, replace_probability=0.39)
 
     def get_replacement_candidates(
         self, doc: PetDocument
@@ -190,10 +202,30 @@ class TransformerFill(base.BaseTokenReplacementStep):
         self.tokenizer = transformers.AutoTokenizer.from_pretrained(transformer_model)
 
     @staticmethod
+    def get_default_configuration(
+        dataset: typing.List[PetDocument],
+    ) -> "TransformerFill":
+        tag_groups = params.ChoiceParam(
+            name="tag_groups", choices=list(Pos), max_num_picks=4
+        ).bit_mask_to_choices(1)
+        return TransformerFill(
+            dataset,
+            replace_probability=0.3,
+            tag_groups=tag_groups,
+        )
+
+    @staticmethod
     def get_params() -> typing.List[typing.Union[params.Param]]:
         return base.BaseTokenReplacementStep.get_params() + [
             params.ChoiceParam(name="tag_groups", choices=list(Pos), max_num_picks=4),
         ]
+
+    @staticmethod
+    def pos_tag_choice_from_bitmask(bitmask: int) -> typing.List[Pos]:
+        param = params.ChoiceParam(
+            name="tag_groups", choices=list(Pos), max_num_picks=4
+        )
+        return param.bit_mask_to_choices(bitmask)
 
     def get_replacement_candidates(
         self, doc: PetDocument

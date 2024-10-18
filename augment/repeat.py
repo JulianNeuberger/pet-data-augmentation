@@ -13,6 +13,10 @@ class UniformRepeat(base.AugmentationStep):
         return [doc.copy(clear=[]) for _ in range(num_augments)]
 
     @staticmethod
+    def get_default_configuration(dataset: typing.List[PetDocument]) -> "UniformRepeat":
+        return UniformRepeat(dataset)
+
+    @staticmethod
     def get_params() -> typing.List[typing.Union[params.Param]]:
         return []
 
@@ -58,6 +62,12 @@ class InverseTypeFrequencySampler(base.AugmentationStep, abc.ABC):
 
 
 class InverseMentionTypeFrequencySampler(InverseTypeFrequencySampler):
+    @staticmethod
+    def get_default_configuration(
+        dataset: typing.List[PetDocument],
+    ) -> "InverseMentionTypeFrequencySampler":
+        return InverseMentionTypeFrequencySampler(dataset)
+
     def get_documents_by_type(self) -> typing.Dict[str, typing.List[PetDocument]]:
         ret = {}
         for d in self.dataset:
@@ -70,6 +80,12 @@ class InverseMentionTypeFrequencySampler(InverseTypeFrequencySampler):
 
 
 class InverseRelationTypeFrequencySampler(InverseTypeFrequencySampler):
+    @staticmethod
+    def get_default_configuration(
+        dataset: typing.List[PetDocument],
+    ) -> "InverseRelationTypeFrequencySampler":
+        return InverseRelationTypeFrequencySampler(dataset)
+
     def get_documents_by_type(self) -> typing.Dict[str, typing.List[PetDocument]]:
         ret = {}
         for d in self.dataset:

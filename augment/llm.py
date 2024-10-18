@@ -28,6 +28,12 @@ class LargeLanguageModelRephrasing(base.BaseTokenReplacementStep):
         )
         self.model = model
 
+    @staticmethod
+    def get_default_configuration(
+        dataset: typing.List[PetDocument],
+    ) -> "LargeLanguageModelRephrasing":
+        return LargeLanguageModelRephrasing(dataset, replace_probability=0.1)
+
     def get_replacement_candidates(
         self, doc: PetDocument
     ) -> typing.List[typing.List[PetToken]]:

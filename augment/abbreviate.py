@@ -112,6 +112,14 @@ class ContractionsAndExpansionsPerturbation(BaseAbbreviationStep):
     B.27
     """
 
+    @staticmethod
+    def get_default_configuration(
+        dataset: typing.List[PetDocument],
+    ) -> "ContractionsAndExpansionsPerturbation":
+        return ContractionsAndExpansionsPerturbation(
+            dataset, replace_probability=0.97, case_sensitive=True
+        )
+
     def get_abbreviations(self) -> typing.Dict[str, typing.List[str]]:
         abbreviations = {}
         resources_path = (
@@ -133,6 +141,12 @@ class InsertAbbreviations(base.BaseTokenReplacementStep):
     https://github.com/GEM-benchmark/NL-Augmenter/tree/main/nlaugmenter/transformations/insert_abbreviation
     B.52
     """
+
+    @staticmethod
+    def get_default_configuration(
+        dataset: typing.List[PetDocument],
+    ) -> "InsertAbbreviations":
+        return InsertAbbreviations(dataset, replace_probability=0.46)
 
     def __init__(
         self, dataset: typing.List[PetDocument], replace_probability: float, **kwargs
@@ -185,6 +199,14 @@ class ReplaceAbbreviationsAndAcronyms(BaseAbbreviationStep):
     https://github.com/GEM-benchmark/NL-Augmenter/tree/main/nlaugmenter/transformations/replace_abbreviation_and_acronyms
     B.82
     """
+
+    @staticmethod
+    def get_default_configuration(
+        dataset: typing.List[PetDocument],
+    ) -> "ReplaceAbbreviationsAndAcronyms":
+        return ReplaceAbbreviationsAndAcronyms(
+            dataset, replace_probability=0.89, case_sensitive=True
+        )
 
     def get_abbreviations(self) -> typing.Dict[str, typing.List[str]]:
         abbreviations = {}

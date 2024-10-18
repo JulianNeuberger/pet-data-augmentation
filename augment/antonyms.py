@@ -15,6 +15,12 @@ class AntonymInversionStep(base.BaseTokenReplacementStep):
     https://github.com/GEM-benchmark/NL-Augmenter/tree/main/nlaugmenter/transformations/adjectives_antonyms_switch
     """
 
+    @staticmethod
+    def get_default_configuration(
+        dataset: typing.List[PetDocument],
+    ) -> "AntonymInversionStep":
+        return AntonymInversionStep(dataset, replace_probability=0.93)
+
     def get_replacement_candidates(
         self, document: PetDocument
     ) -> typing.List[typing.List[PetToken]]:
@@ -57,6 +63,12 @@ class EvenAntonymsSubstitute(base.AugmentationStep):
     B.5
     https://github.com/GEM-benchmark/NL-Augmenter/tree/main/nlaugmenter/transformations/antonyms_substitute
     """
+
+    @staticmethod
+    def get_default_configuration(
+        dataset: typing.List[PetDocument],
+    ) -> "EvenAntonymsSubstitute":
+        return EvenAntonymsSubstitute(dataset)
 
     @staticmethod
     def get_params() -> typing.List[typing.Union[params.Param]]:

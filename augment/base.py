@@ -18,6 +18,12 @@ class AugmentationStep(abc.ABC):
         raise NotImplementedError()
 
     @staticmethod
+    def get_default_configuration(
+        dataset: typing.List[PetDocument],
+    ) -> "AugmentationStep":
+        raise NotImplementedError()
+
+    @staticmethod
     def validate_params(clazz: typing.Type["AugmentationStep"]):
         args = inspect.getfullargspec(clazz.__init__).args
         missing_args = []

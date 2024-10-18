@@ -28,6 +28,12 @@ class SynonymInsertion(base.BaseTokenReplacementStep):
         self.relevant_pos = Pos.VERB.tags + Pos.AD.tags + Pos.NOUN.tags
 
     @staticmethod
+    def get_default_configuration(
+        dataset: typing.List[PetDocument],
+    ) -> "SynonymInsertion":
+        return SynonymInsertion(dataset, replace_probability=0.15)
+
+    @staticmethod
     def get_wordnet_pos(treebank_tag: str):
         if treebank_tag.startswith("J"):
             return wordnet.ADJ
@@ -96,6 +102,12 @@ class SynonymSubstitution(base.BaseTokenReplacementStep):
     ):
         super().__init__(dataset, replace_probability, **kwargs)
         self.relevant_pos = Pos.VERB.tags + Pos.AD.tags + Pos.NOUN.tags
+
+    @staticmethod
+    def get_default_configuration(
+        dataset: typing.List[PetDocument],
+    ) -> "SynonymSubstitution":
+        return SynonymSubstitution(dataset, replace_probability=0.30)
 
     @staticmethod
     def get_wordnet_pos(treebank_tag: str):

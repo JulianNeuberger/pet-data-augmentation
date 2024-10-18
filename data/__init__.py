@@ -5,6 +5,7 @@ from data.pet import (
     PetRelation,
     PetMention,
     NewPetFormatImporter,
+    PetJsonLinesExporter,
 )
 
 from data.base import (

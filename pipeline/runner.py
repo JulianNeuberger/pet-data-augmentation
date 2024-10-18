@@ -74,7 +74,7 @@ def cross_validate_pipeline(
         for i, pipeline_result in enumerate(pipeline_results):
             os.makedirs(dump_predictions_dir, exist_ok=True)
             out_path = os.path.join(dump_predictions_dir, f"fold-{i}.json")
-            data.pet.PetJsonExporter(out_path).export(
+            data.pet.PetJsonLinesExporter(out_path).export(
                 pipeline_result.step_results[p.steps[-1]].predictions
             )
 

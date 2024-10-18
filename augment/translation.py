@@ -43,6 +43,12 @@ class BackTranslation(base.BaseTokenReplacementStep):
         )
 
     @staticmethod
+    def get_default_configuration(
+        dataset: typing.List[PetDocument],
+    ) -> "BackTranslation":
+        return BackTranslation(dataset, replace_probability=0.99, segment_length=3)
+
+    @staticmethod
     def get_params() -> typing.List[typing.Union[params.Param]]:
         return base.BaseTokenReplacementStep.get_params() + [
             params.IntegerParam(name="segment_length", min_value=1, max_value=6),
@@ -232,6 +238,16 @@ class MultiLingualBackTranslation(base.BaseTokenReplacementStep):
         self.pivot_lang = pivot_language
 
     @staticmethod
+    def get_default_configuration(
+        dataset: typing.List[PetDocument],
+    ) -> "MultiLingualBackTranslation":
+        return MultiLingualBackTranslation(
+            dataset,
+            replace_probability=0.22,
+            pivot_language=MultiLingualBackTranslation.languages[52],
+        )
+
+    @staticmethod
     def get_params() -> typing.List[typing.Union[params.Param]]:
         return base.BaseTokenReplacementStep.get_params() + [
             params.ChoiceParam(
@@ -341,6 +357,12 @@ class LostInTranslation(base.BaseTokenReplacementStep):
             )
             for lang in self.languages
         }
+
+    @staticmethod
+    def get_default_configuration(
+        dataset: typing.List[PetDocument],
+    ) -> "LostInTranslation":
+        raise NotImplementedError()
 
     @staticmethod
     def get_params() -> typing.List[typing.Union[params.Param]]:
