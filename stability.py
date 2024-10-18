@@ -30,12 +30,13 @@ def main():
         "device_ids": device_ids,
     }
 
-    pipeline_step_name: str = pipeline_step_class._name
-
     stability_results: typing.Dict[str, typing.List[float]] = {}
 
     stats_path = (
-        pathlib.Path(__file__).parent / "res" / "stability" / pipeline_step_name
+        pathlib.Path(__file__).parent
+        / "res"
+        / "stability"
+        / pipeline_step_class.__name__
     ).resolve()
     stats_path.mkdir(exist_ok=True)
 
