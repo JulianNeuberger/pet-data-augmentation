@@ -408,7 +408,8 @@ class LostInTranslation(base.BaseTokenReplacementStep):
             translations = self.back_translate(translations, lang, 5 if i == 0 else 1)
             translations = list(set(translations))
             translations = [
-                t for t in translations if nltk.tokenize.word_tokenize(t) < 300
+                t for t in translations
+                if len(nltk.tokenize.word_tokenize(t)) < 300
             ]
         return translations
 
