@@ -332,7 +332,7 @@ class LostInTranslation(base.BaseTokenReplacementStep):
         languages: typing.List[str],
         strategy: str = "strict",
         num_translation_hops: int = 5,
-        device: typing.Optional[int] = 0,
+        device: typing.Optional[int] = -1,
         **kwargs,
     ):
         super().__init__(dataset, replace_probability, **kwargs)
@@ -362,7 +362,7 @@ class LostInTranslation(base.BaseTokenReplacementStep):
     def get_default_configuration(
         dataset: typing.List[PetDocument],
     ) -> "LostInTranslation":
-        raise NotImplementedError()
+        return LostInTranslation(dataset=dataset, replace_probability=0.22, languages=["es", "de"])
 
     @staticmethod
     def get_params() -> typing.List[typing.Union[params.Param]]:
@@ -406,6 +406,10 @@ class LostInTranslation(base.BaseTokenReplacementStep):
             else:
                 lang = languages[i % len(languages)]
             translations = self.back_translate(translations, lang, 5 if i == 0 else 1)
+            translations = list(set(translations))
+            translations = [
+                t for t in translations if nltk.tokenize.word_tokenize(t) < 300
+            ]
         return translations
 
     def back_translate(
@@ -416,7 +420,7 @@ class LostInTranslation(base.BaseTokenReplacementStep):
 
         encoded = encode(
             texts,
-            max_length=600,
+            max_length=500,
             num_return_sequences=num_translations,
             num_beams=num_translations,
         )
@@ -424,7 +428,7 @@ class LostInTranslation(base.BaseTokenReplacementStep):
             encoded = encoded[0]
 
         encoded = [t["translation_text"] for t in encoded]
-        decoded = [t["translation_text"] for t in decode(encoded, max_length=600)]
+        decoded = [t["translation_text"] for t in decode(encoded, max_length=500)]
         return decoded
 
 

@@ -19,6 +19,7 @@ from data import PetDocument
 strategies: typing.List[typing.Type[augment.AugmentationStep]] = (
     augment.collect_all_augmentations(augment.base.AugmentationStep)
 )
+strategies = [s for s in strategies if s != augment.LargeLanguageModelRephrasing]
 # strategies: typing.List[typing.Type[augment.AugmentationStep]] = [
 #     # augment.LargeLanguageModelRephrasing
 #     augment.UniformRepeat,
@@ -75,31 +76,13 @@ def objective_factory(
     **kwargs,
 ):
     def objective(trial: optuna.Trial):
-
         augmentation_rate = trial.suggest_float("augmentation_rate", low=0.0, high=10.0)
-        un_augmented_train_folds = []
-        augmented_train_folds: typing.List[typing.List[PetDocument]] = []
-        test_folds = []
-        for train_indices, test_indices in fold_indices:
-            test_documents = [documents[i] for i in test_indices]
-            un_augmented_train_documents = [documents[i] for i in train_indices]
-
-            step = instantiate_step(
-                augmenter_class, trial, un_augmented_train_documents
-            )
-
-            augmented_train_documents = augment.run_augmentation(
-                un_augmented_train_documents, [step], augmentation_rate
-            )
-            random.shuffle(augmented_train_documents)
-            augmented_train_folds.append(augmented_train_documents)
-            un_augmented_train_folds.append(un_augmented_train_documents)
-            print(
-                f"Augmented {len(un_augmented_train_documents)} documents "
-                f"with augmentation rate of {augmentation_rate:.4f} "
-                f"resulting in {len(augmented_train_documents)} documents"
-            )
-            test_folds.append(test_documents)
+        aug_result = augment.augment_folds(
+            documents,
+            fold_indices,
+            lambda train_docs: instantiate_step(augmenter_class, trial, train_docs),
+            augmentation_rate,
+        )
 
         augmented_pipeline_step = pipeline_step_class(
             name="crf mention extraction", **kwargs
@@ -109,8 +92,8 @@ def objective_factory(
                 name=f"augmentation-{pipeline_step_class.__name__}",
                 steps=[augmented_pipeline_step],
             ),
-            train_folds=augmented_train_folds,
-            test_folds=test_folds,
+            train_folds=aug_result.augmented_train_folds,
+            test_folds=aug_result.test_folds,
             save_results=False,
         )
 
@@ -152,15 +135,15 @@ def main():
     )
     fold_indices = list(kf.split(all_documents))
 
-    # pipeline_step_class = pipeline.CrfMentionEstimatorStep
-    # kwargs = {}
+    pipeline_step_class = pipeline.CrfMentionEstimatorStep
+    kwargs = {}
 
-    pipeline_step_class = pipeline.CatBoostRelationExtractionStep
-    kwargs = {
-        "num_trees": 100,
-        "device": device,
-        "device_ids": device_ids,
-    }
+    # pipeline_step_class = pipeline.CatBoostRelationExtractionStep
+    # kwargs = {
+    #     "num_trees": 100,
+    #     "device": device,
+    #     "device_ids": device_ids,
+    # }
 
     train_folds: typing.List[typing.List[PetDocument]] = []
     test_folds: typing.List[typing.List[PetDocument]] = []

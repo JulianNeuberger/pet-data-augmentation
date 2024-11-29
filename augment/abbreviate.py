@@ -257,6 +257,12 @@ class UseAcronyms(BaseAbbreviationStep):
                 abbreviations[key].append(value)
         return abbreviations
 
+    @staticmethod
+    def get_default_configuration(
+        dataset: typing.List[PetDocument],
+    ) -> "UseAcronyms":
+        return UseAcronyms(dataset=dataset, replace_probability=0.88, case_sensitive=True)
+
 
 if __name__ == "__main__":
 

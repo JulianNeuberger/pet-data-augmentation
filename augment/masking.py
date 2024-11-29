@@ -71,6 +71,17 @@ class ContextualMeaningPerturbation(base.BaseTokenReplacementStep):
         new_tokens = [t for t in new_tokens if t.strip() != ""]
         return [[t] for t in new_tokens]
 
+    @staticmethod
+    def get_default_configuration(
+        dataset: typing.List[PetDocument],
+    ) -> "ContextualMeaningPerturbation":
+        choice_param = params.ChoiceParam(name="tag_groups", choices=list(Pos), max_num_picks=4)
+        return ContextualMeaningPerturbation(
+            dataset=dataset,
+            replace_probability=0.3,
+            tag_groups=choice_param.bit_mask_to_choices(3),
+        )
+
 
 class HyponymReplacement(base.BaseTokenReplacementStep):
     """

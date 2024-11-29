@@ -262,3 +262,5 @@ experiments.bkp.pkl
 jsonl/
 
 res/runs/
+res/embeddings
+res/augmentations
