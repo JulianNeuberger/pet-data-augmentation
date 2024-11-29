@@ -19,6 +19,7 @@ from data import PetDocument
 strategies: typing.List[typing.Type[augment.AugmentationStep]] = (
     augment.collect_all_augmentations(augment.base.AugmentationStep)
 )
+strategies = [s for s in strategies if s != augment.LargeLanguageModelRephrasing]
 # strategies: typing.List[typing.Type[augment.AugmentationStep]] = [
 #     # augment.LargeLanguageModelRephrasing
 #     augment.UniformRepeat,
@@ -152,15 +153,15 @@ def main():
     )
     fold_indices = list(kf.split(all_documents))
 
-    # pipeline_step_class = pipeline.CrfMentionEstimatorStep
-    # kwargs = {}
+    pipeline_step_class = pipeline.CrfMentionEstimatorStep
+    kwargs = {}
 
-    pipeline_step_class = pipeline.CatBoostRelationExtractionStep
-    kwargs = {
-        "num_trees": 100,
-        "device": device,
-        "device_ids": device_ids,
-    }
+    #pipeline_step_class = pipeline.CatBoostRelationExtractionStep
+    #kwargs = {
+    #    "num_trees": 100,
+    #    "device": device,
+    #    "device_ids": device_ids,
+    #}
 
     train_folds: typing.List[typing.List[PetDocument]] = []
     test_folds: typing.List[typing.List[PetDocument]] = []

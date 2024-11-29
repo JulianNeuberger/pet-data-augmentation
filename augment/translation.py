@@ -332,7 +332,7 @@ class LostInTranslation(base.BaseTokenReplacementStep):
         languages: typing.List[str],
         strategy: str = "strict",
         num_translation_hops: int = 5,
-        device: typing.Optional[int] = 0,
+        device: typing.Optional[int] = -1,
         **kwargs,
     ):
         super().__init__(dataset, replace_probability, **kwargs)
